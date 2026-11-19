@@ -2562,7 +2562,8 @@ console.log(response.choices[0].message.content)
         } as Record<string, string>,
       },
       wb: {
-        quickPick: 'WorkBuddy 订阅授权 →',
+        section: '订阅授权（免粘贴 Key）',
+        more: '更多订阅渠道接入中',
         title: 'WorkBuddy 订阅账号',
         lead: '授权自己的 WorkBuddy 订阅：点击后在新窗口完成腾讯登录，本页自动确认授权，无需粘贴 Key。',
         connect: '连接 WorkBuddy 账号',

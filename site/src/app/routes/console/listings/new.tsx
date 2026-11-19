@@ -1050,16 +1050,24 @@ export function NewListingPage() {
                   />
                 </Field>
                 {!isWB ? (
-                  <button
-                    type="button"
-                    onClick={pickWorkBuddy}
-                    className="flex items-center gap-2 glass px-3 py-2 text-left text-meta transition-colors hover:border-brand/40"
-                  >
-                    <span className="font-medium text-ink">{page.wb.quickPick}</span>
-                    <span className="font-mono text-caption text-ink-3">
-                      copilot.tencent.com
-                    </span>
-                  </button>
+                  <div>
+                    <h4 className="text-meta font-medium text-ink-3">{page.wb.section}</h4>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={pickWorkBuddy}
+                        className="flex items-center gap-2 glass px-3 py-2 text-left text-meta transition-colors hover:border-brand/40"
+                      >
+                        <span className="font-medium text-ink">WorkBuddy</span>
+                        <span className="font-mono text-caption text-ink-3">
+                          copilot.tencent.com
+                        </span>
+                      </button>
+                      <span className="flex cursor-not-allowed items-center gap-2 rounded-md border border-dashed border-line px-3 py-2 text-meta text-ink-3">
+                        {page.wb.more}
+                      </span>
+                    </div>
+                  </div>
                 ) : null}
                 {isWB ? (
                   <div className="glass-inset px-4 py-4">
