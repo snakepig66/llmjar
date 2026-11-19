@@ -38,6 +38,7 @@ import {
 } from '@/ui'
 
 import {
+  checkinListing,
   modelChangeErrors,
   pauseListing,
   replaceListingKey,
@@ -889,6 +890,42 @@ export function ListingEditDrawer({
     onError: (error) => notify(toast, { title: sellerErrorMessage(error), tone: 'error' }),
   })
 
+  const checkinToggle = useMutation({
+    mutationFn: (next: boolean) => updateListingSettings(listingId, { auto_checkin: next }),
+    onSuccess: (_updated, next) => {
+      queryClient.setQueryData<SellerListingDetail>(
+        sellerListingDetailQuery(listingId).queryKey,
+        (row) => (row ? { ...row, auto_checkin: next } : row),
+      )
+      notify(toast, { title: page.checkin.toggled(next), tone: 'success' })
+      void queryClient.invalidateQueries({ queryKey: ['marketplace', 'seller'] })
+    },
+    onError: (error) => notify(toast, { title: sellerErrorMessage(error), tone: 'error' }),
+  })
+
+  const checkinNow = useMutation({
+    mutationFn: () => checkinListing(listingId),
+    onSuccess: (res) => {
+      queryClient.setQueryData<SellerListingDetail>(
+        sellerListingDetailQuery(listingId).queryKey,
+        (row) =>
+          row
+            ? {
+                ...row,
+                checkin_at: new Date().toISOString(),
+                checkin_result: res.message ? `${res.outcome}: ${res.message}` : res.outcome,
+              }
+            : row,
+      )
+      notify(toast, {
+        title: res.message ? `${res.outcome}: ${res.message}` : res.outcome,
+        tone: 'success',
+      })
+      void queryClient.invalidateQueries({ queryKey: ['marketplace', 'seller'] })
+    },
+    onError: (error) => notify(toast, { title: sellerErrorMessage(error), tone: 'error' }),
+  })
+
   // -- 渲染 ----------------------------------------------------------------
   function handleOpenChange(next: boolean) {
     if (!next) onClose()
@@ -1025,13 +1062,15 @@ export function ListingEditDrawer({
                 <InfoField label={page.overview.fields.fingerprint}>
                   <div className="flex items-center gap-2">
                     <span className="font-mono">{listing.key_fingerprint8 || '—'}</span>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setKeyDialogOpen(true)}
-                    >
-                      {page.key.replace}
-                    </Button>
+                    {!listing.wb_account ? (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setKeyDialogOpen(true)}
+                      >
+                        {page.key.replace}
+                      </Button>
+                    ) : null}
                   </div>
                 </InfoField>
                 <InfoField label={page.overview.fields.vendor}>
@@ -1043,6 +1082,39 @@ export function ListingEditDrawer({
                 <InfoField label={page.overview.fields.created}>
                   {formatDateTime(listing.created_at)}
                 </InfoField>
+                {listing.wb_account ? (
+                  <>
+                    <InfoField label={page.checkin.account}>
+                      {listing.wb_account}
+                    </InfoField>
+                    <InfoField label={page.checkin.auto}>
+                      <Switch
+                        checked={Boolean(listing.auto_checkin)}
+                        loading={checkinToggle.isPending}
+                        aria-label={page.checkin.auto}
+                        onCheckedChange={(next) => checkinToggle.mutate(next)}
+                      />
+                    </InfoField>
+                    <InfoField label={page.checkin.lastResult}>
+                      <div className="flex items-center gap-2">
+                        <span>
+                          {listing.checkin_result || page.checkin.never}
+                          {listing.checkin_at
+                            ? ` · ${formatDateTime(listing.checkin_at)}`
+                            : ''}
+                        </span>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          loading={checkinNow.isPending}
+                          onClick={() => checkinNow.mutate()}
+                        >
+                          {page.checkin.runNow}
+                        </Button>
+                      </div>
+                    </InfoField>
+                  </>
+                ) : null}
               </dl>
               <div>
                 <div className="flex items-center justify-between">
@@ -1101,16 +1173,20 @@ export function ListingEditDrawer({
               <InfoField label={page.key.fingerprint}>
                 <span className="font-mono">{listing.key_fingerprint8 || '—'}</span>
               </InfoField>
-              <div>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  disabled={!isListingKeyReplaceable(listing.status)}
-                  onClick={() => setKeyDialogOpen(true)}
-                >
-                  {page.key.replace}
-                </Button>
-              </div>
+              {listing.wb_account ? (
+                <p className="text-meta leading-5 text-ink-3">{page.checkin.managedKey}</p>
+              ) : (
+                <div>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    disabled={!isListingKeyReplaceable(listing.status)}
+                    onClick={() => setKeyDialogOpen(true)}
+                  >
+                    {page.key.replace}
+                  </Button>
+                </div>
+              )}
             </Section>
 
             {/* 4. 模型与价格 */}

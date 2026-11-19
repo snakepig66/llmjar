@@ -120,6 +120,11 @@ func registerSellerRoutes(g *gin.RouterGroup) {
 	// verified before it replaces the live policy; reads are masked.
 	g.GET("/seller/listings/:id/headers", getSellerListingHeaders)
 	g.PUT("/seller/listings/:id/headers", putSellerListingHeaders)
+	// WorkBuddy browser sign-in (workbuddy.go): start returns the Tencent
+	// sign-in page; status performs one server-side token poll per call.
+	g.POST("/seller/wb-auth/start", postSellerWBAuthStart)
+	g.GET("/seller/wb-auth/status", getSellerWBAuthStatus)
+	g.POST("/seller/listings/:id/checkin", postSellerListingCheckin)
 	g.GET("/seller/balance", getSellerBalance)
 	g.POST("/seller/payouts", postSellerPayout)
 }
@@ -230,6 +235,13 @@ type sellerListingRequest struct {
 	// its upstream alias and its multiplier. Models listed here are merged into
 	// Models.
 	ModelConfigs []sellerModelConfig `json:"model_configs"`
+	// WBSession names a completed WorkBuddy sign-in (POST /seller/wb-auth/start
+	// then /seller/wb-auth/status); when set, the channel's credential comes
+	// from the captured OAuth bundle, VendorID must be workbuddy and APIKey is
+	// ignored.
+	WBSession string `json:"wb_session"`
+	// AutoCheckin turns on the daily WorkBuddy check-in job (workbuddy only).
+	AutoCheckin bool `json:"auto_checkin"`
 }
 
 // sellerModelConfig is one row of the seller's model picker.
@@ -270,6 +282,13 @@ type sellerListingView struct {
 	ResumeAt *time.Time `json:"resume_at,omitempty"`
 	// Verification is the per-model outcome of the latest verify probe.
 	Verification *sellerVerificationView `json:"verification,omitempty"`
+	// WorkBuddy OAuth channels: whether the daily check-in job is on, when it
+	// last ran and what it answered. Account names the authorized WorkBuddy
+	// account (never the tokens).
+	AutoCheckin   bool       `json:"auto_checkin,omitempty"`
+	CheckinAt     *time.Time `json:"checkin_at,omitempty"`
+	CheckinResult string     `json:"checkin_result,omitempty"`
+	WBAccount     string     `json:"wb_account,omitempty"`
 }
 
 // sellerVerificationView surfaces the latest verify probe's per-model results
@@ -354,7 +373,7 @@ func toSellerListingView(l *Listing) sellerListingView {
 	if len(l.KeyFingerprint) >= 8 {
 		fp8 = l.KeyFingerprint[:8]
 	}
-	return sellerListingView{
+	v := sellerListingView{
 		ID:               l.ID,
 		Vendor:           l.Vendor,
 		Label:            l.Label,
@@ -371,7 +390,14 @@ func toSellerListingView(l *Listing) sellerListingView {
 		Weight:           l.Weight,
 		PauseReason:      l.PauseReason,
 		ResumeAt:         l.ResumeAt,
+		AutoCheckin:      l.AutoCheckin,
+		CheckinAt:        l.CheckinAt,
+		CheckinResult:    l.CheckinResult,
 	}
+	if cred := wbCredentialOf(l); cred != nil {
+		v.WBAccount = cred.AccountName
+	}
+	return v
 }
 
 // postSellerListing serves POST /seller/listings — create a listing (draft,
@@ -416,6 +442,22 @@ func postSellerListing(c *gin.Context) {
 		KeyStrategy:       req.KeyStrategy,
 		Affinity:          req.Affinity,
 		Weight:            req.Weight,
+		AutoCheckin:       req.AutoCheckin,
+	}
+	if sid := strings.TrimSpace(req.WBSession); sid != "" {
+		cred, cerr := wbAuthConsume(sellerID, sid)
+		if cerr != nil {
+			common.ApiErrorStatus(c, http.StatusBadRequest, errors.New("WorkBuddy 授权会话无效或已过期，请重新授权"))
+			return
+		}
+		raw, merr := common.Marshal(cred)
+		if merr != nil {
+			common.ApiErrorStatus(c, http.StatusInternalServerError, errors.New("WorkBuddy 凭据编码失败"))
+			return
+		}
+		in.VendorID = VendorWorkBuddy
+		in.APIKey = cred.Access
+		in.OAuthBundle = string(raw)
 	}
 	if len(req.ModelConfigs) > 0 {
 		in.UpstreamModels = make(map[string]string, len(req.ModelConfigs))
@@ -1401,6 +1443,7 @@ type sellerListingSettingsRequest struct {
 	RPMLimit         *int    `json:"rpm_limit"`
 	DailyCapMicro    *int64  `json:"daily_cap_micro"`
 	Hours            *string `json:"hours"`
+	AutoCheckin      *bool   `json:"auto_checkin"`
 }
 
 // updateSellerListingSettings serves PUT /seller/listings/:id — name, limits
@@ -1429,6 +1472,7 @@ func updateSellerListingSettings(c *gin.Context) {
 		RPMLimit:         req.RPMLimit,
 		DailyCapMicro:    req.DailyCapMicro,
 		Hours:            req.Hours,
+		AutoCheckin:      req.AutoCheckin,
 	}, time.Now())
 	if err != nil {
 		switch {

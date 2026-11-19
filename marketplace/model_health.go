@@ -354,7 +354,7 @@ func verifyModelAvailabilityAsync(db *gorm.DB, listingID int64, model string) {
 	if listing.Status != ListingLive && listing.Status != ListingCanary && listing.Status != ListingPaused {
 		return
 	}
-	apiKey, err := DecryptListingKey(listing.KeyCiphertext)
+	apiKey, err := decryptListingKeyForUse(db, &listing)
 	if err != nil {
 		return
 	}
@@ -371,7 +371,7 @@ func verifyModelAvailabilityAsync(db *gorm.DB, listingID int64, model string) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
-	out := probeModelCallOutcome(ctx, client, VendorOpenAIBase(vendor), upstreamModel, apiKey)
+	out := listingModelProbe(ctx, client, &listing, VendorOpenAIBase(vendor), upstreamModel, apiKey)
 	detail, err := common.Marshal(map[string]any{
 		"model":            model,
 		"ok":               out.OK,
@@ -546,7 +546,7 @@ func RestoreAutoDisabledModels(db *gorm.DB, listingID, sellerID int64, now time.
 		result.StillFailing = []ModelChangeError{}
 		return result, nil
 	}
-	apiKey, err := DecryptListingKey(listing.KeyCiphertext)
+	apiKey, err := decryptListingKeyForUse(db, &listing)
 	if err != nil {
 		return result, err
 	}
@@ -579,7 +579,7 @@ func RestoreAutoDisabledModels(db *gorm.DB, listingID, sellerID int64, now time.
 			defer cancel()
 			results[index] = probeResult{
 				row: rows[index],
-				out: probeModelCallOutcome(ctx, client, VendorOpenAIBase(vendor), upstreamModel, apiKey),
+				out: listingModelProbe(ctx, client, &listing, VendorOpenAIBase(vendor), upstreamModel, apiKey),
 			}
 		}(i)
 	}

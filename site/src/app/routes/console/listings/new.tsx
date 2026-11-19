@@ -30,6 +30,8 @@ import {
   sellerGroupsQuery,
   sellerListingsQuery,
   sellerVendorsQuery,
+  startWBAuth,
+  wbAuthStatus,
   type ProbeResult,
   type SellerQuotaWindow,
   type SellerVendor,
@@ -94,7 +96,12 @@ const wizardSchema = z
       .trim()
       .min(1, validation.url)
       .refine((value) => validCustomURL(value), validation.url),
-    api_keys: z.string().refine((value) => validApiKeys(parseApiKeys(value)), validation.key),
+    api_keys: z
+      .string()
+      .refine(
+        (value) => value.trim() === '' || validApiKeys(parseApiKeys(value)),
+        validation.key,
+      ),
     models: z.array(z.string()).min(1, validation.models),
     concurrency: z
       .number()
@@ -116,6 +123,7 @@ const wizardSchema = z
     headers: z.string(),
     extra_endpoints: z.array(z.string()),
     plan_terms_accepted: z.boolean(),
+    auto_checkin: z.boolean(),
   })
   .superRefine((value, ctx) => {
     for (const day of DAY_KEYS) {
@@ -519,6 +527,10 @@ export function NewListingPage() {
   const [manualEndpoints, setManualEndpoints] = useState<string[]>([])
   const [duplicate, setDuplicate] = useState<DuplicateKeyIssue | null>(null)
   const [submitError, setSubmitError] = useState<string | null>(null)
+  const [wbSession, setWBSession] = useState<{ id: string; account: string } | null>(null)
+  const [wbAuthID, setWBAuthID] = useState<string | null>(null)
+  const [wbStarting, setWBStarting] = useState(false)
+  const [wbError, setWBError] = useState<string | null>(null)
 
   const form = useForm<WizardForm>({
     resolver: zodResolver(wizardSchema),
@@ -540,6 +552,7 @@ export function NewListingPage() {
       headers: '',
       extra_endpoints: [],
       plan_terms_accepted: false,
+      auto_checkin: false,
     },
   })
   const values = form.watch()
@@ -561,12 +574,53 @@ export function NewListingPage() {
     [groups.data, matchedVendor],
   )
   const isCustomAddress = Boolean(validCustomURL(values.url) && !matchedVendor)
+  const isWB = matchedVendor?.id === 'workbuddy'
   const requiresPlanTerms = Boolean(
     matchedVendor && sellerChannelKind(matchedVendor) === 'plan',
   )
   const quotaWindowText = requiresPlanTerms
     ? planWindowText(matchedVendor?.quota_window)
     : null
+
+  // WorkBuddy sign-in poll: while a session is pending, ask the backend every
+  // 2s; each call is one upstream token poll. Authorization finishes in place
+  // of a callback — WorkBuddy never redirects back.
+  useEffect(() => {
+    if (!wbAuthID || wbSession) return
+    const timer = setInterval(() => {
+      wbAuthStatus(wbAuthID)
+        .then((s) => {
+          if (s.status === 'authorized') {
+            setWBSession({ id: wbAuthID, account: s.account_name ?? '' })
+            setWBAuthID(null)
+          } else if (s.status === 'failed') {
+            setWBError(s.error || page.wb.failed)
+            setWBAuthID(null)
+          }
+        })
+        .catch((error: unknown) => {
+          setWBError(sellerErrorMessage(error))
+          setWBAuthID(null)
+        })
+    }, 2000)
+    return () => clearInterval(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wbAuthID, wbSession])
+
+  async function connectWB() {
+    setWBError(null)
+    setWBSession(null)
+    setWBStarting(true)
+    try {
+      const start = await startWBAuth()
+      window.open(start.auth_url, '_blank', 'noopener')
+      setWBAuthID(start.session_id)
+    } catch (error) {
+      setWBError(sellerErrorMessage(error))
+    } finally {
+      setWBStarting(false)
+    }
+  }
 
   const probeInput = (key: string, modelsToProbe?: string[]) => ({
     vendor_id: matchedVendor?.id ?? '',
@@ -629,6 +683,11 @@ export function NewListingPage() {
   // ShareLLM-style catalogue: every upstream name with its suggested pool
   // match, plus the full priced pool the seller may pick from directly.
   const upstreamOptions = useMemo(() => {
+    if (isWB && matchedVendor) {
+      return matchedVendor.models.map(
+        (model): UpstreamModelOption => ({ upstream: model, suggested_model: model, priced: false }),
+      )
+    }
     const seen = new Map<string, UpstreamModelOption>()
     const sources = [recognition, ...Object.values(keyProbes)]
     for (const probe of sources) {
@@ -637,14 +696,25 @@ export function NewListingPage() {
       }
     }
     return Array.from(seen.values())
-  }, [recognition, keyProbes])
+  }, [isWB, matchedVendor, recognition, keyProbes])
   const poolOptions = useMemo(() => {
+    if (isWB && matchedVendor) {
+      const zero = {
+        input_micro_per_mtok: 0,
+        output_micro_per_mtok: 0,
+        cache_read_micro_per_mtok: 0,
+        cache_write_micro_per_mtok: 0,
+      }
+      return matchedVendor.models.map(
+        (model): PoolModelOption => ({ model, vendor: matchedVendor.id, price: zero }),
+      )
+    }
     const sources = [recognition, ...Object.values(keyProbes)]
     for (const probe of sources) {
       if (probe?.pool_models && probe.pool_models.length > 0) return probe.pool_models
     }
     return [] as PoolModelOption[]
-  }, [recognition, keyProbes])
+  }, [isWB, matchedVendor, recognition, keyProbes])
   const poolIds = useMemo(() => new Set(poolOptions.map((p) => p.model)), [poolOptions])
   const suggestedAlias = useMemo(() => {
     const out: Record<string, string> = {}
@@ -666,10 +736,11 @@ export function NewListingPage() {
   }, [keyProbes, recognition])
   // Pool picks the upstream matcher did not suggest still count as available.
   const availableModels = useMemo(() => {
+    if (isWB) return [...(matchedVendor?.models ?? [])].sort()
     const union = new Set(suggestedModels)
     for (const model of values.models ?? []) if (poolIds.has(model)) union.add(model)
     return Array.from(union).sort()
-  }, [suggestedModels, values.models, poolIds])
+  }, [isWB, matchedVendor, suggestedModels, values.models, poolIds])
 
   // Only preselect models that have been detected as available (verified_models).
   useEffect(() => {
@@ -701,12 +772,12 @@ export function NewListingPage() {
 
   const flatHours = flattenHours(values.availability)
   const headersValid = trust?.trust === 'unlisted' ? validRequestHeaders(values.headers) : true
-  const hasPassedKey = keys.some((k) => keyProbes[k]?.key_valid)
+  const hasPassedKey = isWB ? Boolean(wbSession) : keys.some((k) => keyProbes[k]?.key_valid)
   const snapshot: WizardSnapshot = {
     url: values.url,
     vendorId: matchedVendor?.id ?? (isCustomAddress ? CUSTOM_VENDOR_ID : ''),
     customBaseURL: matchedVendor ? undefined : values.url.trim(),
-    apiKeys: keys,
+    apiKeys: isWB && wbSession ? ['wb-oauth'] : keys,
     hasPassedKey,
     trust,
     probe: recognition,
@@ -834,6 +905,24 @@ export function NewListingPage() {
       key_strategy: keyStrategy,
       affinity_enabled: data.affinity,
     }
+    if (isWB) {
+      if (!wbSession || data.models.length === 0) return []
+      const model_configs = data.models.map((model) => ({
+        model,
+        upstream_model: aliasFor(model),
+        multiplier_milli: multipliers[model] ?? DEFAULT_MULTIPLIER_MILLI,
+      }))
+      return [
+        {
+          ...base,
+          wb_session: wbSession.id,
+          auto_checkin: data.auto_checkin,
+          models: data.models,
+          weight: 100,
+          model_configs,
+        },
+      ]
+    }
     const payloads: CreateListingInput[] = []
     for (const key of keys) {
       const probe = keyProbes[key]
@@ -878,12 +967,14 @@ export function NewListingPage() {
 
   const verification = buildVerificationMatrix(keys, values.models, endpoints, keyProbes)
   const passedCount = verification.filter((cell) => cell.ok).length
-  const hasPassingModels = keys.some((key) => {
-    const probe = keyProbes[key]
-    if (!probe?.key_valid) return false
-    const callable = new Set(probe.verified_models ?? probe.models ?? [])
-    return values.models.some((model) => callable.has(model) || poolIds.has(model))
-  })
+  const hasPassingModels = isWB
+    ? Boolean(wbSession) && values.models.length > 0
+    : keys.some((key) => {
+        const probe = keyProbes[key]
+        if (!probe?.key_valid) return false
+        const callable = new Set(probe.verified_models ?? probe.models ?? [])
+        return values.models.some((model) => callable.has(model) || poolIds.has(model))
+      })
   const stepRequired = useMemo(() => {
     if (step === 0) {
       const filled = (validCustomURL(values.url) ? 1 : 0) + (hasPassedKey ? 1 : 0)
@@ -947,6 +1038,59 @@ export function NewListingPage() {
                     {...form.register('url')}
                   />
                 </Field>
+                {isWB ? (
+                  <div className="glass-inset px-4 py-4">
+                    <h3 className="text-meta font-semibold text-ink">{page.wb.title}</h3>
+                    <p className="mt-1 text-meta leading-5 text-ink-3">{page.wb.lead}</p>
+                    {wbSession ? (
+                      <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+                        <span className="flex items-center gap-2 text-meta font-medium text-emerald-600">
+                          <span aria-hidden="true">✓</span>
+                          {page.wb.connected(wbSession.account || page.wb.accountFallback)}
+                        </span>
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => void connectWB()}
+                        >
+                          {page.wb.reconnect}
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="mt-3 flex flex-wrap items-center gap-2">
+                        <Button
+                          type="button"
+                          onClick={() => void connectWB()}
+                          loading={wbStarting || Boolean(wbAuthID)}
+                          disabled={wbStarting}
+                        >
+                          {wbAuthID ? page.wb.waiting : page.wb.connect}
+                        </Button>
+                        {wbAuthID ? (
+                          <span className="text-meta text-ink-3">{page.wb.waitingHint}</span>
+                        ) : null}
+                      </div>
+                    )}
+                    {wbError ? (
+                      <p className="mt-2 text-meta text-danger" role="alert">
+                        {wbError}
+                      </p>
+                    ) : null}
+                    <label className="mt-3 flex items-center gap-2 text-meta text-ink">
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 accent-brand"
+                        {...form.register('auto_checkin')}
+                      />
+                      {page.wb.autoCheckin}
+                    </label>
+                    <p className="mt-1 text-caption leading-5 text-ink-3">
+                      {page.wb.autoCheckinHint}
+                    </p>
+                  </div>
+                ) : (
+                  <>
                 <Field
                   label={page.key.label}
                   htmlFor="new-listing-keys"
@@ -1038,6 +1182,8 @@ export function NewListingPage() {
                     <p className="text-caption text-warn">至少一个 Key 通过连通性测试才能进入下一步。</p>
                   ) : null}
                 </div>
+                  </>
+                )}
                 {trust?.trust === 'blocked' ? (
                   <p className="text-meta leading-5 text-danger" role="alert">
                     {page.trust.blocked}
@@ -1177,7 +1323,8 @@ export function NewListingPage() {
                   <Skeleton className="h-4 w-4 rounded-full" />
                   <span className="text-meta text-ink-3">{page.models.loading}</span>
                 </div>
-              ) : !probed || (upstreamOptions.length === 0 && poolOptions.length === 0) ? (
+              ) : (!probed && !isWB) ||
+                (upstreamOptions.length === 0 && poolOptions.length === 0) ? (
                 <p className="text-meta leading-5 text-warn" role="status">
                   {page.models.noModels}
                 </p>
@@ -1465,21 +1612,27 @@ export function NewListingPage() {
                   <p className="mt-1 text-meta text-ink-3">{page.verify.lead}</p>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="text-meta tabular-nums text-ink-3">
-                    {page.verify.passed(passedCount, verification.length)}
-                  </span>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    loading={probingKeys}
-                    onClick={() => void probeAllKeys(true, values.models)}
-                  >
-                    {probingKeys ? page.verify.rechecking : page.verify.recheck}
-                  </Button>
+                  {!isWB ? (
+                    <>
+                      <span className="text-meta tabular-nums text-ink-3">
+                        {page.verify.passed(passedCount, verification.length)}
+                      </span>
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        loading={probingKeys}
+                        onClick={() => void probeAllKeys(true, values.models)}
+                      >
+                        {probingKeys ? page.verify.rechecking : page.verify.recheck}
+                      </Button>
+                    </>
+                  ) : null}
                 </div>
               </div>
 
-              {keys.length === 0 || values.models.length === 0 ? (
+              {isWB ? (
+                <p className="text-meta leading-5 text-ink-3">{page.wb.verifyNote}</p>
+              ) : keys.length === 0 || values.models.length === 0 ? (
                 <p className="text-meta text-ink-3">{page.verify.noSelection}</p>
               ) : (
                 <Table minWidth={760} size="compact">

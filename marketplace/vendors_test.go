@@ -70,7 +70,7 @@ func TestVendorIDs(t *testing.T) {
 	t.Cleanup(resetVendorRegistryForTest)
 	ids := VendorIDs()
 	require.Equal(t, []string{
-		"deepseek", "volcengine-ark", "aliyun-bailian", "moonshot", "zhipu", "minimax",
+		"deepseek", "volcengine-ark", "aliyun-bailian", "moonshot", "zhipu", "minimax", "workbuddy",
 	}, ids, "the production whitelist holds the OFFICIAL-CHANNELS §1 channels only (H8: tipig is not built in)")
 }
 
@@ -99,7 +99,7 @@ func TestVendorExtraFromEnv(t *testing.T) {
 
 	ids := VendorIDs()
 	assert.Equal(t, []string{
-		"deepseek", "volcengine-ark", "aliyun-bailian", "moonshot", "zhipu", "minimax", "tipig",
+		"deepseek", "volcengine-ark", "aliyun-bailian", "moonshot", "zhipu", "minimax", "workbuddy", "tipig",
 	}, ids)
 	assert.Contains(t, VendorHosts(), "api.tipig.cloud",
 		"injected base URLs seed the egress whitelist")
@@ -107,14 +107,14 @@ func TestVendorExtraFromEnv(t *testing.T) {
 	// Idempotent: reloading the same environment yields the same whitelist.
 	require.NoError(t, LoadExtraVendorsFromEnv())
 	require.NoError(t, LoadExtraVendorsFromEnv())
-	assert.Len(t, VendorIDs(), 7)
+	assert.Len(t, VendorIDs(), 8)
 
 	// Clearing the variable removes the injected vendor again.
 	require.NoError(t, os.Unsetenv(ExtraVendorsEnv))
 	require.NoError(t, LoadExtraVendorsFromEnv())
 	_, ok = VendorByID("tipig")
 	assert.False(t, ok, "an unset MP_EXTRA_VENDORS clears the injected vendors")
-	assert.Len(t, VendorIDs(), 6)
+	assert.Len(t, VendorIDs(), 7)
 }
 
 func TestVendorExtraInvalidEnv(t *testing.T) {

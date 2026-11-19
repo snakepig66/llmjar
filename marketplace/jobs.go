@@ -88,6 +88,11 @@ func StartJobs(db *gorm.DB, stop <-chan struct{}) {
 			common.SysError(common.LogText("marketplace: patrol-live job: %s", err.Error()))
 		}
 	})
+	// WorkBuddy daily check-in: claims each opted-in channel's daily credit
+	// once per China-local day (the activity resets at CST midnight).
+	go runJobLoop("wb-checkin", time.Hour, stop, func() {
+		wbCheckinJob(db, time.Now())
+	})
 	go runJobLoop("reload-calendar", jobCalendarInterval, stop, func() {
 		if _, cal := relayState(); cal != nil {
 			if err := cal.Reload(db); err != nil {
@@ -295,7 +300,7 @@ func patrolOneListing(db *gorm.DB, limiter *VerifyLimiter, l *Listing) error {
 // injected so tests can point every probe (verification and fingerprint) at a
 // mock upstream.
 func patrolOneListingWithClient(db *gorm.DB, limiter *VerifyLimiter, client *http.Client, l *Listing) error {
-	apiKey, err := DecryptListingKey(l.KeyCiphertext)
+	apiKey, err := decryptListingKeyForUse(db, l)
 	if err != nil {
 		return err
 	}
@@ -314,7 +319,14 @@ func patrolOneListingWithClient(db *gorm.DB, limiter *VerifyLimiter, client *htt
 	// failures on everything after it. The /models key check runs once; each
 	// model then gets its own real max_tokens=1 call.
 	base := VendorOpenAIBase(vendor)
-	keyRes := VerifyListingKeyWithModel(ctx, client, vendor, apiKey, "")
+	var keyRes VerifyResult
+	if wbCredentialOf(l) != nil {
+		// WorkBuddy has no /models endpoint; the streamed per-model probes
+		// below are the entire callability check.
+		keyRes.KeyValid = true
+	} else {
+		keyRes = VerifyListingKeyWithModel(ctx, client, vendor, apiKey, "")
+	}
 	passed := 0
 	modelResults := make([]ModelVerifyResult, 0, len(l.Models))
 	for _, m := range l.Models {
@@ -323,8 +335,9 @@ func patrolOneListingWithClient(db *gorm.DB, limiter *VerifyLimiter, client *htt
 		case len(keyRes.Models) > 0 && !keyExposesModel(keyRes.Models, mr.UpstreamModel):
 			mr.FailReason = "该模型不在这个 Key 的可用模型列表中"
 		default:
+			out := listingModelProbe(ctx, client, l, base, mr.UpstreamModel, apiKey)
 			mr.OK, mr.PromptCacheSupport, mr.LatencyMs, mr.FailReason =
-				probeModelCall(ctx, client, base, mr.UpstreamModel, apiKey)
+				out.OK, out.PromptCache, out.LatencyMs, out.FailReason
 		}
 		if mr.OK {
 			passed++
@@ -398,9 +411,9 @@ func patrolOneListingWithClient(db *gorm.DB, limiter *VerifyLimiter, client *htt
 				if strings.TrimSpace(prompt) == "" {
 					prompt = defaultFingerprintPrompt
 				}
-				fp := CompareFingerprint(ctx, client,
+				fp := compareFingerprintForListing(ctx, client,
 					officialVendor, officialKey, officialUpstream,
-					vendor, apiKey, mr.UpstreamModel, prompt)
+					vendor, l, apiKey, mr.UpstreamModel, prompt)
 				fr.Checked = fp.Checked
 				fr.Matched = fp.Passed()
 				fr.Ratio = fp.Ratio

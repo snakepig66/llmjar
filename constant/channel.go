@@ -61,6 +61,7 @@ const (
 	ChannelTypeTaskPlugin     = 61
 	ChannelTypeVLLM           = 62
 	ChannelTypeSGLang         = 63
+	ChannelTypeWorkBuddy      = 64
 	ChannelTypeDummy          // this one is only for count, do not add any channel after this
 
 )
@@ -201,6 +202,7 @@ var ChannelTypeNames = map[int]string{
 	ChannelTypeNewAPI:         "New API",
 	ChannelTypeTaskPlugin:     "Task Plugin",
 	ChannelTypeVLLM:           "vLLM",
+	ChannelTypeWorkBuddy:      "WorkBuddy",
 	ChannelTypeSGLang:         "SGLang",
 }
 

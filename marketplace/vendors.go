@@ -212,6 +212,21 @@ var vendors = []Vendor{
 		Adaptor:         VendorAdaptorOpenAI,
 		StripV1Prefix:   true,
 	},
+	{
+		// WorkBuddy OAuth channel (workbuddy.go): the credential is a browser
+		// sign-in bundle, not a pasted key. Plan tier: the seller must confirm
+		// the plan terms allow sharing.
+		ID:          VendorWorkBuddy,
+		DisplayName: "WorkBuddy",
+		Tier:        ChannelKindPlan,
+		BaseURL:     wbChatBase,
+		Protocols: VendorProtocols{
+			OpenAI:    wbChatBase,
+			Anthropic: wbMsgsBase,
+		},
+		PassthroughBody: true,
+		Adaptor:         VendorAdaptorOpenAI,
+	},
 }
 
 // extraVendors holds the vendors injected through MP_EXTRA_VENDORS. It is

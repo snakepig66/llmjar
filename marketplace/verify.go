@@ -444,7 +444,7 @@ func VerifyListing(ctx context.Context, db *gorm.DB, client *http.Client, limite
 		return VerifyResult{}, err
 	}
 
-	apiKey, err := DecryptListingKey(listing.KeyCiphertext)
+	apiKey, err := decryptListingKeyForUse(db, &listing)
 	if err != nil {
 		// Nothing was probed; roll the status back before reporting.
 		return VerifyResult{}, errors.Join(err, revertVerificationToDraft(db, listingID))
@@ -463,7 +463,14 @@ func VerifyListing(ctx context.Context, db *gorm.DB, client *http.Client, limite
 	}
 	// The key check itself (models + balance) runs without its single paid
 	// probe; every selected model gets its own real max_tokens=1 call below.
-	res := VerifyListingKeyWithModel(ctx, client, vendor, apiKey, "")
+	// WorkBuddy's plugin API has no /models endpoint: the per-model streamed
+	// probes below are the entire callability check.
+	var res VerifyResult
+	if wbCredentialOf(&listing) != nil {
+		res.KeyValid = true
+	} else {
+		res = VerifyListingKeyWithModel(ctx, client, vendor, apiKey, "")
+	}
 	base := VendorOpenAIBase(vendor)
 
 	// Listing presence in /models is not callability: Bailian and Volcengine
@@ -479,8 +486,9 @@ func VerifyListing(ctx context.Context, db *gorm.DB, client *http.Client, limite
 		case len(res.Models) > 0 && !keyExposesModel(res.Models, upstreamByModel[m]):
 			mr.FailReason = "该模型不在这个 Key 的可用模型列表中"
 		default:
+			out := listingModelProbe(ctx, client, &listing, base, upstreamByModel[m], apiKey)
 			mr.OK, mr.PromptCacheSupport, mr.LatencyMs, mr.FailReason =
-				probeModelCall(ctx, client, base, upstreamByModel[m], apiKey)
+				out.OK, out.PromptCache, out.LatencyMs, out.FailReason
 			if !mr.OK && strings.Contains(mr.FailReason, "404") && isCustomChannelSlug(listing.Vendor) {
 				altBase := strings.TrimSuffix(base, "/") + "/v1"
 				if altOk, altCache, altLat, _ := probeModelCall(ctx, client, altBase, upstreamByModel[m], apiKey); altOk {
@@ -565,8 +573,8 @@ func VerifyListing(ctx context.Context, db *gorm.DB, client *http.Client, limite
 					if strings.TrimSpace(prompt) == "" {
 						prompt = defaultFingerprintPrompt
 					}
-					fp := CompareFingerprint(ctx, client, officialVendor, officialKey, officialUpstream,
-						vendor, apiKey, upstreamByModel[m], prompt)
+					fp := compareFingerprintForListing(ctx, client, officialVendor, officialKey, officialUpstream,
+						vendor, &listing, apiKey, upstreamByModel[m], prompt)
 					fr.Checked = fp.Checked
 					fr.Matched = fp.Passed()
 					fr.Ratio = fp.Ratio

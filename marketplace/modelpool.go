@@ -321,6 +321,16 @@ var channelPoolSeeds = []ChannelPool{
 		Adaptor:             VendorAdaptorOpenAI,
 		Status:              PoolStatusActive,
 	},
+	{
+		// WorkBuddy OAuth channel (workbuddy.go): the seller authorizes their
+		// WorkBuddy account instead of pasting a key; chats are streamed only
+		// and the China build serves Claude models on /v1/messages.
+		Slug: VendorWorkBuddy, Name: "WorkBuddy", Kind: ChannelKindPlan,
+		Protocols:  `{"openai":"` + wbChatBase + `","anthropic":"` + wbMsgsBase + `"}`,
+		KeyPattern: `^.+$`,
+		Adaptor:    VendorAdaptorOpenAI,
+		Status:     PoolStatusActive,
+	},
 }
 
 // poolChannelModelSeeds is the initial sellable-qualification seed.

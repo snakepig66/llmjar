@@ -212,6 +212,13 @@ type CreateListingInput struct {
 	// ModelMultipliers optionally overrides MultiplierMilli per model; each
 	// value is validated against the channel's bounds.
 	ModelMultipliers map[string]int64
+	// OAuthBundle is the plaintext WorkBuddy credential JSON (input only,
+	// workbuddy.go). When set, APIKey must be the bundle's access token: the
+	// bundle goes to OAuthCiphertext and the listing's fingerprint is the
+	// account identity, not the token.
+	OAuthBundle string
+	// AutoCheckin turns on the daily WorkBuddy check-in job for the channel.
+	AutoCheckin bool
 }
 
 // normalizeKeyStrategy maps an arbitrary input onto the two supported group
@@ -457,6 +464,23 @@ func CreateListing(db *gorm.DB, in CreateListingInput) (Listing, error) {
 	if err != nil {
 		return Listing{}, err
 	}
+	// WorkBuddy OAuth channels: the key is the bundle's access token; the
+	// account identity in the bundle is the credential fingerprint, so a
+	// token refresh can never change the dedup/ban identity.
+	var wbCred *wbCredential
+	if vendor.ID == VendorWorkBuddy {
+		wbCred = &wbCredential{}
+		if err := common.UnmarshalJsonStr(strings.TrimSpace(in.OAuthBundle), wbCred); err != nil || wbCred.Access == "" || wbCred.UID == "" {
+			return Listing{}, errors.New("marketplace: workbuddy credential is missing or malformed")
+		}
+		if wbCred.Access != strings.TrimSpace(in.APIKey) {
+			return Listing{}, errors.New("marketplace: workbuddy access token does not match the credential")
+		}
+		fingerprint, err = wbIdentityFingerprint(wbCred)
+		if err != nil {
+			return Listing{}, err
+		}
+	}
 	models := dedupModels(in.Models)
 
 	// MODEL-CHANNEL-POOL §3.2: a listing may only include certified,
@@ -558,6 +582,11 @@ func CreateListing(db *gorm.DB, in CreateListingInput) (Listing, error) {
 		if vendor.Adaptor == VendorAdaptorDeepSeek {
 			channelType = constant.ChannelTypeDeepSeek
 		}
+		if wbCred != nil {
+			// WorkBuddy only accepts streamed chats and needs the stream
+			// aggregated back for non-streaming buyers.
+			channelType = constant.ChannelTypeWorkBuddy
+		}
 		channel := model.Channel{
 			Type:        channelType,
 			Key:         "mp-managed:" + fingerprint[:8],
@@ -603,6 +632,17 @@ func CreateListing(db *gorm.DB, in CreateListingInput) (Listing, error) {
 			settingText := string(settingJSON)
 			channel.Setting = &settingText
 		}
+		if wbCred != nil {
+			// WorkBuddy requests must carry the desktop CLI's header
+			// fingerprint (error 10085 otherwise); the dynamic ids resolve
+			// per request through the {uuid} placeholders.
+			headerJSON, herr := common.Marshal(wbStaticHeaders(wbCred))
+			if herr != nil {
+				return fmt.Errorf("marketplace: encode workbuddy headers: %w", herr)
+			}
+			headerText := string(headerJSON)
+			channel.HeaderOverride = &headerText
+		}
 		if err := tx.Create(&channel).Error; err != nil {
 			return fmt.Errorf("marketplace: create upstream channel: %w", err)
 		}
@@ -637,6 +677,18 @@ func CreateListing(db *gorm.DB, in CreateListingInput) (Listing, error) {
 			Version:          1,
 			GroupID:          group.ID,
 			Weight:           in.Weight,
+			AutoCheckin:      in.AutoCheckin && vendor.ID == VendorWorkBuddy,
+		}
+		if wbCred != nil {
+			raw, merr := common.Marshal(wbCred)
+			if merr != nil {
+				return fmt.Errorf("marketplace: encode workbuddy credential: %w", merr)
+			}
+			blob, berr := EncryptProtectedBlob(raw)
+			if berr != nil {
+				return fmt.Errorf("marketplace: encrypt workbuddy credential: %w", berr)
+			}
+			listing.OAuthCiphertext = blob
 		}
 		if err := tx.Create(&listing).Error; err != nil {
 			// The unique index on key_fingerprint is the concurrency
@@ -1161,6 +1213,9 @@ type UpdateListingSettingsInput struct {
 	RPMLimit         *int
 	DailyCapMicro    *int64
 	Hours            *string
+	// AutoCheckin toggles the daily WorkBuddy check-in job (workbuddy only;
+	// ignored on other channels).
+	AutoCheckin *bool
 }
 
 // UpdateListingSettings applies the mutable listing-level settings of one
@@ -1204,6 +1259,10 @@ func UpdateListingSettings(db *gorm.DB, id, sellerID int64, in UpdateListingSett
 		}
 		updates["hours"] = hours
 		audit["hours"] = hours
+	}
+	if in.AutoCheckin != nil {
+		updates["auto_checkin"] = *in.AutoCheckin
+		audit["auto_checkin"] = *in.AutoCheckin
 	}
 	if len(updates) == 0 {
 		return GetListingForSeller(db, id, sellerID)
