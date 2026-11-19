@@ -66,6 +66,8 @@ func vendorLogoURL(slug string) string {
 		return "/vendors/doubao.svg"
 	case "tencent", "hunyuan":
 		return "/vendors/hunyuan.svg"
+	case "workbuddy":
+		return "/vendors/workbuddy.svg"
 	case "openai":
 		return "/vendors/openai.svg"
 	case "anthropic", "claude":

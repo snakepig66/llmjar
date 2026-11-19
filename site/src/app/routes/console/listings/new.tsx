@@ -1063,9 +1063,11 @@ export function NewListingPage() {
                 {isWB ? (
                   <div className="mt-3 max-w-2xl rounded-xl border border-brand/30 bg-brand-soft/40 px-5 py-4">
                     <div className="flex items-start gap-3.5">
-                      <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-brand to-brand-ink text-base font-bold text-white">
-                        W
-                      </span>
+                      <img
+                        src="/vendors/workbuddy.svg"
+                        alt=""
+                        className="h-10 w-10 shrink-0 rounded-full"
+                      />
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2">
                           <span className="text-body font-medium text-ink">WorkBuddy</span>
@@ -1139,9 +1141,11 @@ export function NewListingPage() {
                       onClick={pickWorkBuddy}
                       className="group flex items-center gap-3.5 rounded-xl border border-line bg-white/70 p-4 text-left transition-colors hover:border-brand/50 hover:bg-white"
                     >
-                      <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-brand to-brand-ink text-lg font-bold text-white">
-                        W
-                      </span>
+                      <img
+                        src="/vendors/workbuddy.svg"
+                        alt=""
+                        className="h-11 w-11 shrink-0 rounded-full"
+                      />
                       <span className="min-w-0 flex-1">
                         <span className="flex items-center gap-2">
                           <span className="truncate text-body font-medium text-ink">
