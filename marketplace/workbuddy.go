@@ -28,6 +28,7 @@ import (
 	"io"
 	"math"
 	"net/http"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -122,6 +123,12 @@ var wbPluginEndpoint = wbEndpoint
 // wbCall mirrors the plugin's call(): every WorkBuddy plugin endpoint answers
 // {code,msg,data}; a nonzero code is an error carrying msg.
 func wbCall(ctx context.Context, client *http.Client, method, path string, headers map[string]string, body any) (map[string]any, error) {
+	return wbCallBase(ctx, client, method, wbPluginEndpoint, path, headers, body)
+}
+
+// wbCallBase is wbCall against an account-resolved base: a cloud-hosted
+// enterprise answers on its own domain, not the shared plugin endpoint.
+func wbCallBase(ctx context.Context, client *http.Client, method, base, path string, headers map[string]string, body any) (map[string]any, error) {
 	var reader io.Reader
 	if body != nil {
 		raw, err := common.Marshal(body)
@@ -130,7 +137,7 @@ func wbCall(ctx context.Context, client *http.Client, method, path string, heade
 		}
 		reader = strings.NewReader(string(raw))
 	}
-	req, err := http.NewRequestWithContext(ctx, method, wbPluginEndpoint+path, reader)
+	req, err := http.NewRequestWithContext(ctx, method, base+path, reader)
 	if err != nil {
 		return nil, err
 	}
@@ -222,6 +229,104 @@ func wbEnterpriseHeaders(c *wbCredential) map[string]string {
 	return map[string]string{"X-Enterprise-Id": c.EnterpriseID, "X-Tenant-Id": c.EnterpriseID}
 }
 
+// wbCloudHostedRe are WorkBuddy's cloud-hosted enterprise domains (the
+// client's product.json cloudHostedDomain). Such an account is served on
+// its own host; Tencent's iOA domains match the pattern too but are served
+// at the shared endpoint, so they are checked first.
+var wbCloudHostedRe = []*regexp.Regexp{
+	regexp.MustCompile(`^[a-z0-9-]+\.sso\.copilot\.tencent\.com$`),
+	regexp.MustCompile(`^[a-z0-9-]+\.copilot\.qq\.com$`),
+	regexp.MustCompile(`^[a-z0-9-]+\.sso\.codebuddy\.cn$`),
+}
+
+// wbAccountEndpoint mirrors the plugin's endpointOf: an account named with a
+// cloud-hosted enterprise domain is served there; everyone else (and the iOA
+// domains) uses the shared endpoint.
+func wbAccountEndpoint(c *wbCredential) string {
+	d := strings.ToLower(strings.TrimSpace(c.Domain))
+	if d != "" && d != "tencent.sso.copilot.tencent.com" && d != "tencent.sso.codebuddy.cn" {
+		for _, re := range wbCloudHostedRe {
+			if re.MatchString(d) {
+				return "https://" + d
+			}
+		}
+	}
+	return wbPluginEndpoint
+}
+
+// wbLiveModel is one model the account's product config lists for its CLI.
+type wbLiveModel struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
+// wbLiveModels reads the account's callable models from WorkBuddy's product
+// config (GET /v3/config), the same list WorkBuddy's own CLI offers: the
+// "cli" agent's model ids, plus enterprise-owned "custom:" models that are
+// appended to it. Models tagged "custom"/"chat" are a desktop client's own
+// local entries and stay out.
+func wbLiveModels(ctx context.Context, client *http.Client, cred *wbCredential) ([]wbLiveModel, error) {
+	h := wbHeadersForProbe(cred)
+	h["Authorization"] = "Bearer " + cred.Access
+	data, err := wbCallBase(ctx, client, http.MethodGet,
+		wbAccountEndpoint(cred), "/v3/config", h, nil)
+	if err != nil {
+		return nil, err
+	}
+	detail := map[string]map[string]any{}
+	if rows, ok := data["models"].([]any); ok {
+		for _, row := range rows {
+			m, _ := row.(map[string]any)
+			if id := wbStr(m, "id"); id != "" {
+				detail[id] = m
+			}
+		}
+	}
+	var out []wbLiveModel
+	seen := map[string]bool{}
+	add := func(id string) {
+		if id == "" || seen[id] {
+			return
+		}
+		seen[id] = true
+		name := id
+		if d, ok := detail[id]; ok {
+			if n := wbStr(d, "name"); n != "" {
+				name = n
+			}
+		}
+		out = append(out, wbLiveModel{ID: id, Name: name})
+	}
+	cliFound := false
+	if agents, ok := data["agents"].([]any); ok {
+		for _, row := range agents {
+			a, _ := row.(map[string]any)
+			if wbStr(a, "name") != "cli" {
+				continue
+			}
+			cliFound = true
+			if ids, ok := a["models"].([]any); ok {
+				for _, v := range ids {
+					if id, ok := v.(string); ok {
+						add(id)
+					}
+				}
+			}
+		}
+	}
+	if cliFound {
+		if rows, ok := data["models"].([]any); ok {
+			for _, row := range rows {
+				m, _ := row.(map[string]any)
+				if id := wbStr(m, "id"); strings.HasPrefix(id, "custom:") {
+					add(id)
+				}
+			}
+		}
+	}
+	return out, nil
+}
+
 // ---------------------------------------------------------------------------
 // Sign-in sessions
 // ---------------------------------------------------------------------------
@@ -235,6 +340,7 @@ type wbAuthSession struct {
 	Status     string // pending / authorized / failed
 	Err        string
 	Account    string
+	Models     []wbLiveModel
 	Credential *wbCredential
 }
 
@@ -384,10 +490,19 @@ func wbAuthPoll(ctx context.Context, sellerID int64, id string) (*wbAuthSession,
 		cred.Domain = "copilot.tencent.com"
 	}
 
+	// The account's callable models come from its product config. A config
+	// read failure does not fail the sign-in: the wizard falls back to the
+	// channel pool's model list.
+	models, merr := wbLiveModels(pctx, wbAuthClient(), cred)
+	if merr != nil {
+		common.SysError(common.LogText("marketplace: workbuddy model list for seller %d: %s", sellerID, merr.Error()))
+	}
+
 	wbAuthMu.Lock()
 	s.Status = "authorized"
 	s.Credential = cred
 	s.Account = cred.AccountName
+	s.Models = models
 	out := *s
 	wbAuthMu.Unlock()
 	return &out, nil

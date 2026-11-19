@@ -961,6 +961,8 @@ export interface WBAuthStart {
 export interface WBAuthStatus {
   status: 'pending' | 'authorized' | 'failed' | string
   account_name?: string
+  /** Models the authorized account's product config offers its CLI. */
+  models?: { id: string; name: string }[]
   error?: string
 }
 

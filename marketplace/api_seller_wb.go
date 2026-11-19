@@ -55,6 +55,7 @@ func getSellerWBAuthStatus(c *gin.Context) {
 	out := gin.H{"status": s.Status}
 	if s.Status == "authorized" {
 		out["account_name"] = s.Account
+		out["models"] = s.Models
 	}
 	if s.Status == "failed" {
 		out["error"] = s.Err

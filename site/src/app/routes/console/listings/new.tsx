@@ -527,7 +527,11 @@ export function NewListingPage() {
   const [manualEndpoints, setManualEndpoints] = useState<string[]>([])
   const [duplicate, setDuplicate] = useState<DuplicateKeyIssue | null>(null)
   const [submitError, setSubmitError] = useState<string | null>(null)
-  const [wbSession, setWBSession] = useState<{ id: string; account: string } | null>(null)
+  const [wbSession, setWBSession] = useState<{
+    id: string
+    account: string
+    models: string[]
+  } | null>(null)
   const [wbAuthID, setWBAuthID] = useState<string | null>(null)
   const [wbStarting, setWBStarting] = useState(false)
   const [wbError, setWBError] = useState<string | null>(null)
@@ -591,7 +595,11 @@ export function NewListingPage() {
       wbAuthStatus(wbAuthID)
         .then((s) => {
           if (s.status === 'authorized') {
-            setWBSession({ id: wbAuthID, account: s.account_name ?? '' })
+            setWBSession({
+              id: wbAuthID,
+              account: s.account_name ?? '',
+              models: (s.models ?? []).map((m) => m.id),
+            })
             setWBAuthID(null)
           } else if (s.status === 'failed') {
             setWBError(s.error || page.wb.failed)
@@ -682,9 +690,16 @@ export function NewListingPage() {
   const probed = Boolean(recognition) || Object.keys(keyProbes).length > 0
   // ShareLLM-style catalogue: every upstream name with its suggested pool
   // match, plus the full priced pool the seller may pick from directly.
+  // For an authorized WorkBuddy account the saleable models are the account's
+  // own product-config list (the wb-auth/status response); the channel pool's
+  // static list is only the fallback before authorization completes.
+  const wbModels = useMemo(() => {
+    if (wbSession && wbSession.models.length > 0) return wbSession.models
+    return matchedVendor?.models ?? []
+  }, [wbSession, matchedVendor])
   const upstreamOptions = useMemo(() => {
-    if (isWB && matchedVendor) {
-      return matchedVendor.models.map(
+    if (isWB) {
+      return wbModels.map(
         (model): UpstreamModelOption => ({ upstream: model, suggested_model: model, priced: false }),
       )
     }
@@ -696,17 +711,17 @@ export function NewListingPage() {
       }
     }
     return Array.from(seen.values())
-  }, [isWB, matchedVendor, recognition, keyProbes])
+  }, [isWB, wbModels, recognition, keyProbes])
   const poolOptions = useMemo(() => {
-    if (isWB && matchedVendor) {
+    if (isWB) {
       const zero = {
         input_micro_per_mtok: 0,
         output_micro_per_mtok: 0,
         cache_read_micro_per_mtok: 0,
         cache_write_micro_per_mtok: 0,
       }
-      return matchedVendor.models.map(
-        (model): PoolModelOption => ({ model, vendor: matchedVendor.id, price: zero }),
+      return wbModels.map(
+        (model): PoolModelOption => ({ model, vendor: matchedVendor?.id ?? 'workbuddy', price: zero }),
       )
     }
     const sources = [recognition, ...Object.values(keyProbes)]
@@ -714,7 +729,7 @@ export function NewListingPage() {
       if (probe?.pool_models && probe.pool_models.length > 0) return probe.pool_models
     }
     return [] as PoolModelOption[]
-  }, [isWB, matchedVendor, recognition, keyProbes])
+  }, [isWB, wbModels, matchedVendor, recognition, keyProbes])
   const poolIds = useMemo(() => new Set(poolOptions.map((p) => p.model)), [poolOptions])
   const suggestedAlias = useMemo(() => {
     const out: Record<string, string> = {}
@@ -736,11 +751,11 @@ export function NewListingPage() {
   }, [keyProbes, recognition])
   // Pool picks the upstream matcher did not suggest still count as available.
   const availableModels = useMemo(() => {
-    if (isWB) return [...(matchedVendor?.models ?? [])].sort()
+    if (isWB) return [...wbModels].sort()
     const union = new Set(suggestedModels)
     for (const model of values.models ?? []) if (poolIds.has(model)) union.add(model)
     return Array.from(union).sort()
-  }, [isWB, matchedVendor, suggestedModels, values.models, poolIds])
+  }, [isWB, wbModels, suggestedModels, values.models, poolIds])
 
   // Only preselect models that have been detected as available (verified_models).
   useEffect(() => {

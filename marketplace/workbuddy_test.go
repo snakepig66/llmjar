@@ -289,6 +289,21 @@ func TestWBAuthFlow(t *testing.T) {
 		}})
 		_, _ = w.Write(raw)
 	})
+	mux.HandleFunc("/v3/config", func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "Bearer wb-access-aaa", r.Header.Get("Authorization"))
+		raw, _ := common.Marshal(map[string]any{"code": 0, "data": map[string]any{
+			"models": []map[string]any{
+				{"id": "deepseek-v4.1-flash", "name": "Deepseek V4.1 Flash"},
+				{"id": "hidden-model", "name": "Not for CLI"},
+				{"id": "custom:dept|dept-model", "name": "部门模型"},
+			},
+			"agents": []map[string]any{
+				{"name": "web", "models": []any{"hidden-model"}},
+				{"name": "cli", "models": []any{"deepseek-v4.1-flash"}},
+			},
+		}})
+		_, _ = w.Write(raw)
+	})
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
 	old := wbPluginEndpoint
@@ -321,6 +336,10 @@ func TestWBAuthFlow(t *testing.T) {
 	require.NotNil(t, p.Credential)
 	assert.Equal(t, "wb-access-aaa", p.Credential.Access)
 	assert.Equal(t, "uid-12345", p.Credential.UID)
+	require.Len(t, p.Models, 2)
+	assert.Equal(t, "deepseek-v4.1-flash", p.Models[0].ID)
+	assert.Equal(t, "Deepseek V4.1 Flash", p.Models[0].Name)
+	assert.Equal(t, "custom:dept|dept-model", p.Models[1].ID)
 
 	// Another seller cannot even see the session.
 	_, err = wbAuthPoll(ctx, 8, s.ID)
