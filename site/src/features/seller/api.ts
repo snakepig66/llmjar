@@ -963,6 +963,11 @@ export interface WBAuthStatus {
   account_name?: string
   /** Models the authorized account's product config offers its CLI. */
   models?: { id: string; name: string }[]
+  /** Same catalogue shape as a probe result, built from the account's models. */
+  upstream_models?: UpstreamModelOption[]
+  pool_models?: PoolModelOption[]
+  verified_models?: string[]
+  coefficients?: Record<string, number>
   error?: string
 }
 

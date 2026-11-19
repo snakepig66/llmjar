@@ -56,6 +56,28 @@ func getSellerWBAuthStatus(c *gin.Context) {
 	if s.Status == "authorized" {
 		out["account_name"] = s.Account
 		out["models"] = s.Models
+		// The account's model ids become the catalogue's upstream names: each
+		// carries a suggested standard-model match (exact → date-stripped →
+		// path-stripped, matchPoolModelName), and the priced pool is the whole
+		// sellable set — the same payload POST /seller/listings/probe returns.
+		if db := sellerDB(c); db != nil {
+			ids := make([]string, 0, len(s.Models))
+			for _, m := range s.Models {
+				ids = append(ids, m.ID)
+			}
+			now := time.Now()
+			catalog := sellerModelCatalogFor(db, ids, now)
+			out["upstream_models"] = catalog.UpstreamModels
+			out["pool_models"] = catalog.PoolModels
+			out["coefficients"] = poolCoefficients(db, VendorWorkBuddy)
+			verified := make([]string, 0, len(catalog.UpstreamModels))
+			for _, um := range catalog.UpstreamModels {
+				if um.Priced && um.SuggestedModel != nil {
+					verified = append(verified, *um.SuggestedModel)
+				}
+			}
+			out["verified_models"] = verified
+		}
 	}
 	if s.Status == "failed" {
 		out["error"] = s.Err

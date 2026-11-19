@@ -33,6 +33,7 @@ import {
   startWBAuth,
   wbAuthStatus,
   type ProbeResult,
+  type WBAuthStatus,
   type SellerQuotaWindow,
   type SellerVendor,
   type SellerCommonAddress,
@@ -531,6 +532,10 @@ export function NewListingPage() {
     id: string
     account: string
     models: string[]
+    catalog: Pick<
+      WBAuthStatus,
+      'upstream_models' | 'pool_models' | 'verified_models' | 'coefficients'
+    > | null
   } | null>(null)
   const [wbAuthID, setWBAuthID] = useState<string | null>(null)
   const [wbStarting, setWBStarting] = useState(false)
@@ -599,6 +604,15 @@ export function NewListingPage() {
               id: wbAuthID,
               account: s.account_name ?? '',
               models: (s.models ?? []).map((m) => m.id),
+              catalog:
+                s.upstream_models || s.pool_models
+                  ? {
+                      upstream_models: s.upstream_models,
+                      pool_models: s.pool_models,
+                      verified_models: s.verified_models,
+                      coefficients: s.coefficients,
+                    }
+                  : null,
             })
             setWBAuthID(null)
           } else if (s.status === 'failed') {
@@ -690,18 +704,14 @@ export function NewListingPage() {
   const probed = Boolean(recognition) || Object.keys(keyProbes).length > 0
   // ShareLLM-style catalogue: every upstream name with its suggested pool
   // match, plus the full priced pool the seller may pick from directly.
-  // For an authorized WorkBuddy account the saleable models are the account's
-  // own product-config list (the wb-auth/status response); the channel pool's
-  // static list is only the fallback before authorization completes.
-  const wbModels = useMemo(() => {
-    if (wbSession && wbSession.models.length > 0) return wbSession.models
-    return matchedVendor?.models ?? []
-  }, [wbSession, matchedVendor])
+  // For an authorized WorkBuddy account the catalogue comes from the
+  // wb-auth/status response: the account's own model ids as upstream names
+  // (each with a suggested pool alias), and the full priced sellable pool —
+  // the same shape a key probe returns.
+  const wbCatalog = wbSession?.catalog ?? null
   const upstreamOptions = useMemo(() => {
     if (isWB) {
-      return wbModels.map(
-        (model): UpstreamModelOption => ({ upstream: model, suggested_model: model, priced: false }),
-      )
+      return wbCatalog?.upstream_models ?? []
     }
     const seen = new Map<string, UpstreamModelOption>()
     const sources = [recognition, ...Object.values(keyProbes)]
@@ -711,25 +721,17 @@ export function NewListingPage() {
       }
     }
     return Array.from(seen.values())
-  }, [isWB, wbModels, recognition, keyProbes])
+  }, [isWB, wbCatalog, recognition, keyProbes])
   const poolOptions = useMemo(() => {
     if (isWB) {
-      const zero = {
-        input_micro_per_mtok: 0,
-        output_micro_per_mtok: 0,
-        cache_read_micro_per_mtok: 0,
-        cache_write_micro_per_mtok: 0,
-      }
-      return wbModels.map(
-        (model): PoolModelOption => ({ model, vendor: matchedVendor?.id ?? 'workbuddy', price: zero }),
-      )
+      return wbCatalog?.pool_models ?? []
     }
     const sources = [recognition, ...Object.values(keyProbes)]
     for (const probe of sources) {
       if (probe?.pool_models && probe.pool_models.length > 0) return probe.pool_models
     }
     return [] as PoolModelOption[]
-  }, [isWB, wbModels, matchedVendor, recognition, keyProbes])
+  }, [isWB, wbCatalog, matchedVendor, recognition, keyProbes])
   const poolIds = useMemo(() => new Set(poolOptions.map((p) => p.model)), [poolOptions])
   const suggestedAlias = useMemo(() => {
     const out: Record<string, string> = {}
@@ -747,15 +749,17 @@ export function NewListingPage() {
     if (recognition?.verified_models) {
       for (const model of recognition.verified_models) union.add(model)
     }
+    if (wbCatalog?.verified_models) {
+      for (const model of wbCatalog.verified_models) union.add(model)
+    }
     return Array.from(union).sort()
-  }, [keyProbes, recognition])
+  }, [keyProbes, recognition, wbCatalog])
   // Pool picks the upstream matcher did not suggest still count as available.
   const availableModels = useMemo(() => {
-    if (isWB) return [...wbModels].sort()
     const union = new Set(suggestedModels)
     for (const model of values.models ?? []) if (poolIds.has(model)) union.add(model)
     return Array.from(union).sort()
-  }, [isWB, wbModels, suggestedModels, values.models, poolIds])
+  }, [suggestedModels, values.models, poolIds])
 
   // Only preselect models that have been detected as available (verified_models).
   useEffect(() => {
@@ -1484,7 +1488,7 @@ export function NewListingPage() {
                 <ChannelModelsEditor
                   upstream={upstreamOptions}
                   pool={poolOptions}
-                  coefficients={recognition?.coefficients}
+                  coefficients={recognition?.coefficients ?? wbCatalog?.coefficients}
                   onFetchUpstream={() => void probeAllKeys(true)}
                   fetching={probingKeys}
                   value={values.models.map(
