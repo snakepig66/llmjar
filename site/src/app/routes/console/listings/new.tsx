@@ -976,6 +976,13 @@ export function NewListingPage() {
     setWBError(null)
   }
 
+  function switchToManual() {
+    form.setValue('url', '', { shouldValidate: true, shouldDirty: true })
+    setWBSession(null)
+    setWBAuthID(null)
+    setWBError(null)
+  }
+
   const verification = buildVerificationMatrix(keys, values.models, endpoints, keyProbes)
   const passedCount = verification.filter((cell) => cell.ok).length
   const hasPassingModels = isWB
@@ -1032,47 +1039,51 @@ export function NewListingPage() {
 
         <div className="pt-5">
           {step === 0 ? (
-            <div className="space-y-6">
-              <div className="max-w-2xl space-y-4">
-                <Field
-                  label={page.url.label}
-                  htmlFor="new-listing-url"
-                  hint={page.url.hint}
-                  error={form.formState.errors.url?.message}
-                >
-                  <Input
-                    id="new-listing-url"
-                    type="url"
-                    spellCheck={false}
-                    placeholder={page.url.placeholder}
-                    invalid={Boolean(form.formState.errors.url)}
-                    {...form.register('url')}
-                  />
-                </Field>
-                {!isWB ? (
-                  <div>
-                    <h4 className="text-meta font-medium text-ink-3">{page.wb.section}</h4>
-                    <div className="mt-2 flex flex-wrap gap-2">
+            <div className="space-y-8">
+              <section>
+                <div className="flex items-center gap-2">
+                  <span className="grid h-6 w-6 shrink-0 place-items-center rounded-md bg-brand-soft text-brand-ink">
+                    <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                      <path
+                        d="M6.6 9.4a3 3 0 0 0 4.2.2l2.1-2.1a3 3 0 1 0-4.2-4.3L7.6 4.3"
+                        stroke="currentColor"
+                        strokeWidth="1.4"
+                        strokeLinecap="round"
+                      />
+                      <path
+                        d="M9.4 6.6a3 3 0 0 0-4.2-.2l-2.1 2.1a3 3 0 1 0 4.2 4.3l1.1-1.1"
+                        stroke="currentColor"
+                        strokeWidth="1.4"
+                        strokeLinecap="round"
+                      />
+                    </svg>
+                  </span>
+                  <h3 className="text-body font-semibold text-ink">{page.wb.section}</h3>
+                </div>
+                {isWB ? (
+                  <div className="mt-3 max-w-2xl rounded-xl border border-brand/30 bg-brand-soft/40 px-5 py-4">
+                    <div className="flex items-start gap-3.5">
+                      <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-brand to-brand-ink text-base font-bold text-white">
+                        W
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-body font-medium text-ink">WorkBuddy</span>
+                          <span className="font-mono text-caption text-ink-3">
+                            copilot.tencent.com
+                          </span>
+                        </div>
+                        <p className="mt-0.5 text-meta leading-5 text-ink-3">{page.wb.lead}</p>
+                      </div>
                       <button
                         type="button"
-                        onClick={pickWorkBuddy}
-                        className="flex items-center gap-2 glass px-3 py-2 text-left text-meta transition-colors hover:border-brand/40"
+                        onClick={switchToManual}
+                        className="shrink-0 text-meta text-ink-3 transition-colors hover:text-ink"
                       >
-                        <span className="font-medium text-ink">WorkBuddy</span>
-                        <span className="font-mono text-caption text-ink-3">
-                          copilot.tencent.com
-                        </span>
+                        {page.wb.change}
                       </button>
-                      <span className="flex cursor-not-allowed items-center gap-2 rounded-md border border-dashed border-line px-3 py-2 text-meta text-ink-3">
-                        {page.wb.more}
-                      </span>
                     </div>
-                  </div>
-                ) : null}
-                {isWB ? (
-                  <div className="glass-inset px-4 py-4">
-                    <h3 className="text-meta font-semibold text-ink">{page.wb.title}</h3>
-                    <p className="mt-1 text-meta leading-5 text-ink-3">{page.wb.lead}</p>
+                    <div className="mt-4 border-t border-brand/15 pt-4">
                     {wbSession ? (
                       <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
                         <span className="flex items-center gap-2 text-meta font-medium text-emerald-600">
@@ -1119,9 +1130,100 @@ export function NewListingPage() {
                     <p className="mt-1 text-caption leading-5 text-ink-3">
                       {page.wb.autoCheckinHint}
                     </p>
+                    </div>
                   </div>
                 ) : (
-                  <>
+                  <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                    <button
+                      type="button"
+                      onClick={pickWorkBuddy}
+                      className="group flex items-center gap-3.5 rounded-xl border border-line bg-white/70 p-4 text-left transition-colors hover:border-brand/50 hover:bg-white"
+                    >
+                      <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-brand to-brand-ink text-lg font-bold text-white">
+                        W
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="flex items-center gap-2">
+                          <span className="truncate text-body font-medium text-ink">
+                            WorkBuddy
+                          </span>
+                          <Tag tone="brand">{page.wb.oauthTag}</Tag>
+                        </span>
+                        <span className="mt-0.5 block truncate font-mono text-caption text-ink-3">
+                          copilot.tencent.com
+                        </span>
+                      </span>
+                      <svg
+                        width="16"
+                        height="16"
+                        viewBox="0 0 16 16"
+                        fill="none"
+                        aria-hidden="true"
+                        className="shrink-0 text-ink-3 transition-colors group-hover:text-brand"
+                      >
+                        <path
+                          d="M6 3.5 10.5 8 6 12.5"
+                          stroke="currentColor"
+                          strokeWidth="1.5"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+                    </button>
+                    <div className="flex items-center gap-3.5 rounded-xl border border-dashed border-line p-4 opacity-60">
+                      <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-dashed border-line text-lg text-ink-3">
+                        +
+                      </span>
+                      <span className="text-meta text-ink-3">{page.wb.more}</span>
+                    </div>
+                  </div>
+                )}
+              </section>
+
+              {!isWB ? (
+                <>
+                  <div className="flex items-center gap-3" aria-hidden="true">
+                    <span className="h-px flex-1 bg-line" />
+                    <span className="text-caption text-ink-3">{page.wb.orManual}</span>
+                    <span className="h-px flex-1 bg-line" />
+                  </div>
+
+                  <section className="max-w-2xl space-y-4">
+                    <div className="flex items-center gap-2">
+                      <span className="grid h-6 w-6 shrink-0 place-items-center rounded-md bg-ink-3/10 text-ink-3">
+                        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                          <circle
+                            cx="5.5"
+                            cy="10.5"
+                            r="3"
+                            stroke="currentColor"
+                            strokeWidth="1.4"
+                          />
+                          <path
+                            d="M7.8 8.2 12.5 3.5M10.5 5.5l1.8 1.8M12.5 3.5l.9.9"
+                            stroke="currentColor"
+                            strokeWidth="1.4"
+                            strokeLinecap="round"
+                          />
+                        </svg>
+                      </span>
+                      <h3 className="text-body font-semibold text-ink">{page.key.sectionTitle}</h3>
+                    </div>
+                <Field
+                  label={page.url.label}
+                  htmlFor="new-listing-url"
+                  hint={page.url.hint}
+                  error={form.formState.errors.url?.message}
+                >
+                  <Input
+                    id="new-listing-url"
+                    type="url"
+                    spellCheck={false}
+                    placeholder={page.url.placeholder}
+                    invalid={Boolean(form.formState.errors.url)}
+                    {...form.register('url')}
+                  />
+                </Field>
                 <Field
                   label={page.key.label}
                   htmlFor="new-listing-keys"
@@ -1213,8 +1315,6 @@ export function NewListingPage() {
                     <p className="text-caption text-warn">至少一个 Key 通过连通性测试才能进入下一步。</p>
                   ) : null}
                 </div>
-                  </>
-                )}
                 {trust?.trust === 'blocked' ? (
                   <p className="text-meta leading-5 text-danger" role="alert">
                     {page.trust.blocked}
@@ -1303,15 +1403,17 @@ export function NewListingPage() {
                     </ul>
                   </div>
                 ) : null}
-              </div>
+                  </section>
 
-              <CommonAddressList
-                addresses={commonAddresses.data ?? []}
-                pending={commonAddresses.isPending}
-                error={commonAddresses.isError}
-                onPick={pickCommonAddress}
-                onRetry={() => void commonAddresses.refetch()}
-              />
+                  <CommonAddressList
+                    addresses={commonAddresses.data ?? []}
+                    pending={commonAddresses.isPending}
+                    error={commonAddresses.isError}
+                    onPick={pickCommonAddress}
+                    onRetry={() => void commonAddresses.refetch()}
+                  />
+                </>
+              ) : null}
             </div>
           ) : null}
 

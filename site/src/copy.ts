@@ -2576,8 +2576,12 @@ console.log(response.choices[0].message.content)
         autoCheckin: '自动每日签到',
         autoCheckinHint: '开启后平台每天自动领取该账号的签到积分，默认关闭。',
         verifyNote: '授权渠道提交后由平台验真真实可调用，所选模型以验真结果为准。',
+        oauthTag: 'OAuth 免 Key',
+        orManual: '或手动接入上游地址与 Key',
+        change: '改用手动接入',
       },
       key: {
+        sectionTitle: 'API Key 渠道',
         label: '上游 API Key',
         placeholder: '每行一个 Key，可一次粘贴多个',
         hint: '支持多行粘贴；每个 Key 单独上架，同一上游地址的多个 Key 会加入同一个渠道。Key 只用于验真和转发。',
