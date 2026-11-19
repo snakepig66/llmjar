@@ -965,6 +965,17 @@ export function NewListingPage() {
     form.setValue('url', `https://${address.host}`, { shouldValidate: true, shouldDirty: true })
   }
 
+  function pickWorkBuddy() {
+    form.setValue('url', 'https://copilot.tencent.com', {
+      shouldValidate: true,
+      shouldDirty: true,
+    })
+    form.setValue('api_keys', '', { shouldValidate: true, shouldDirty: true })
+    setWBSession(null)
+    setWBAuthID(null)
+    setWBError(null)
+  }
+
   const verification = buildVerificationMatrix(keys, values.models, endpoints, keyProbes)
   const passedCount = verification.filter((cell) => cell.ok).length
   const hasPassingModels = isWB
@@ -1038,6 +1049,18 @@ export function NewListingPage() {
                     {...form.register('url')}
                   />
                 </Field>
+                {!isWB ? (
+                  <button
+                    type="button"
+                    onClick={pickWorkBuddy}
+                    className="flex items-center gap-2 glass px-3 py-2 text-left text-meta transition-colors hover:border-brand/40"
+                  >
+                    <span className="font-medium text-ink">{page.wb.quickPick}</span>
+                    <span className="font-mono text-caption text-ink-3">
+                      copilot.tencent.com
+                    </span>
+                  </button>
+                ) : null}
                 {isWB ? (
                   <div className="glass-inset px-4 py-4">
                     <h3 className="text-meta font-semibold text-ink">{page.wb.title}</h3>
