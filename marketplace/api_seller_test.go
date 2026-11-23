@@ -35,7 +35,8 @@ type sellerAPIFixture struct {
 }
 
 // headerSellerUserAuth replaces middleware.UserAuth in tests: the
-// X-Test-User-Id header plays the dashboard session.
+// X-Test-User-Id header plays the dashboard session. Callers default to a
+// common user; X-Test-Role raises the role to exercise admin-only paths.
 func headerSellerUserAuth() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		raw := strings.TrimSpace(c.GetHeader("X-Test-User-Id"))
@@ -45,6 +46,13 @@ func headerSellerUserAuth() gin.HandlerFunc {
 			return
 		}
 		common.SetContextKey(c, constant.ContextKeyUserId, id)
+		role := common.RoleCommonUser
+		if rawRole := strings.TrimSpace(c.GetHeader("X-Test-Role")); rawRole != "" {
+			if parsed, err := strconv.Atoi(rawRole); err == nil {
+				role = parsed
+			}
+		}
+		c.Set("role", role)
 		c.Next()
 	}
 }
@@ -116,6 +124,11 @@ func newSellerAPIFixture(t *testing.T) *sellerAPIFixture {
 
 func (f *sellerAPIFixture) do(t *testing.T, method, path string, body any, userID int) *httptest.ResponseRecorder {
 	t.Helper()
+	return f.doRole(t, method, path, body, userID, 0)
+}
+
+func (f *sellerAPIFixture) doRole(t *testing.T, method, path string, body any, userID, role int) *httptest.ResponseRecorder {
+	t.Helper()
 	var rdr *bytes.Reader
 	if body != nil {
 		raw, err := common.Marshal(body)
@@ -128,6 +141,9 @@ func (f *sellerAPIFixture) do(t *testing.T, method, path string, body any, userI
 	req.Header.Set("Content-Type", "application/json")
 	if userID > 0 {
 		req.Header.Set("X-Test-User-Id", strconv.Itoa(userID))
+	}
+	if role > 0 {
+		req.Header.Set("X-Test-Role", strconv.Itoa(role))
 	}
 	w := httptest.NewRecorder()
 	f.engine.ServeHTTP(w, req)
@@ -160,10 +176,12 @@ func TestSellerCreateListingTriggersVerify(t *testing.T) {
 	key := uniqueTestKey("sk-seller-create")
 	// The mock must accept this listing's actual key.
 	h.wantAuth = "Bearer " + key
-	w := f.do(t, http.MethodPost, "/api/marketplace/seller/listings", map[string]any{
+	// Official channels are admin-only; the create runs as root so the flow
+	// under test (draft → async verify → canary) stays the same.
+	w := f.doRole(t, http.MethodPost, "/api/marketplace/seller/listings", map[string]any{
 		"vendor_id": "deepseek", "api_key": key,
 		"models": []string{"deepseek-flash"}, "multiplier_milli": 500,
-	}, int(f.sellerID))
+	}, int(f.sellerID), common.RoleRootUser)
 	require.Equal(t, http.StatusOK, w.Code)
 	body := decodeSellerBody(t, w)
 	data := body["data"].(map[string]any)
@@ -176,6 +194,55 @@ func TestSellerCreateListingTriggersVerify(t *testing.T) {
 		return err == nil && row.Status == ListingCanary
 	}, 5*time.Second, 10*time.Millisecond)
 	assert.NotContains(t, w.Body.String(), key, "§2.3: the create response never echoes the key")
+}
+
+// TestOfficialChannelsAdminOnly covers the self-operated gate: a common seller
+// cannot create or probe a listing on an official (platform self-operated)
+// channel, and the wizard catalogue hides those channels entirely. An admin
+// keeps both. Plan/third-party channels stay open to every seller.
+func TestOfficialChannelsAdminOnly(t *testing.T) {
+	f := newSellerAPIFixture(t)
+	restore := setSellerVerifyClientForTest(&http.Client{Transport: failingTransport{}})
+	defer restore()
+
+	body := map[string]any{
+		"vendor_id": "deepseek", "api_key": uniqueTestKey("sk-official-gate"),
+		"models": []string{"deepseek-flash"}, "multiplier_milli": 500,
+	}
+	w := f.do(t, http.MethodPost, "/api/marketplace/seller/listings", body, int(f.sellerID))
+	assert.Equal(t, http.StatusForbidden, w.Code)
+	assert.Contains(t, w.Body.String(), "platform self-operated")
+
+	w = f.do(t, http.MethodPost, "/api/marketplace/seller/listings/probe", body, int(f.sellerID))
+	assert.Equal(t, http.StatusForbidden, w.Code)
+
+	// The seller catalogue hides official channels but keeps plan ones.
+	w = f.do(t, http.MethodGet, "/api/marketplace/seller/vendors", nil, int(f.sellerID))
+	require.Equal(t, http.StatusOK, w.Code)
+	rows, ok := decodeSellerBody(t, w)["data"].([]any)
+	require.True(t, ok)
+	for _, raw := range rows {
+		row := raw.(map[string]any)
+		assert.NotEqual(t, ChannelKindOfficial, row["kind"], "row %v", row["id"])
+		assert.NotEqual(t, SeedVendorDeepSeek, row["id"])
+	}
+	require.NotEmpty(t, rows)
+
+	// Admin sees the official channels and can list on them.
+	w = f.doRole(t, http.MethodGet, "/api/marketplace/seller/vendors", nil, int(f.sellerID), common.RoleRootUser)
+	require.Equal(t, http.StatusOK, w.Code)
+	adminRows, ok := decodeSellerBody(t, w)["data"].([]any)
+	require.True(t, ok)
+	var officialSeen bool
+	for _, raw := range adminRows {
+		if raw.(map[string]any)["id"] == SeedVendorDeepSeek {
+			officialSeen = true
+		}
+	}
+	assert.True(t, officialSeen, "admin catalogue still lists the official channels")
+
+	w = f.doRole(t, http.MethodPost, "/api/marketplace/seller/listings", body, int(f.sellerID), common.RoleRootUser)
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
 }
 
 // TestSellerCreatePendingReviewSkipsVerification covers a seller-defined
@@ -718,11 +785,11 @@ func TestProbeDoesNotPersist(t *testing.T) {
 		Where("channel_slug = ? AND model = ?", SeedVendorDeepSeek, "deepseek-flash").
 		Update("coefficient_milli", 1200).Error)
 
-	w := f.do(t, http.MethodPost, "/api/marketplace/seller/listings/probe", map[string]any{
+	w := f.doRole(t, http.MethodPost, "/api/marketplace/seller/listings/probe", map[string]any{
 		"vendor_id": "deepseek",
 		"api_key":   verifyTestKey,
 		"models":    []string{"deepseek-flash"},
-	}, int(f.sellerID))
+	}, int(f.sellerID), common.RoleRootUser)
 	require.Equal(t, http.StatusOK, w.Code)
 
 	data := decodeSellerBody(t, w)["data"].(map[string]any)

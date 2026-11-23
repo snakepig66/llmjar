@@ -4,8 +4,10 @@
 import 'echarts/lib/chart/bar'
 import 'echarts/lib/component/grid'
 import 'echarts/lib/component/tooltip'
-import 'echarts/lib/renderer/installCanvasRenderer'
-import { init, type EChartsType } from 'echarts/core'
+import { CanvasRenderer } from 'echarts/renderers'
+import { init, use, type EChartsType } from 'echarts/core'
+
+use(CanvasRenderer)
 import { useEffect, useRef } from 'react'
 
 import { copy } from '@/copy'
@@ -21,7 +23,7 @@ function tooltipHtml(item: UsageDayStat): string {
   return [
     `<div style="font-weight:600;margin-bottom:4px">${item.date}</div>`,
     `<div>${copy.pages.console.chart.requests} ${item.requests}</div>`,
-    `<div>${copy.pages.console.chart.spend} ${formatYuan(item.total_debit_micro)}</div>`,
+    `<div>${copy.pages.console.chart.spend} ${formatYuan(item.total_debit_micro, 2)}</div>`,
   ].join('')
 }
 
@@ -66,7 +68,7 @@ export function UsageChart({ items }: { items: UsageDayStat[] }) {
           type: 'value',
           minInterval: 1,
           axisLabel: { color: '#8a909c', fontSize: 12 },
-          splitLine: { lineStyle: { color: '#eceef2' } },
+          splitLine: { lineStyle: { color: '#eceef2', type: [3, 3] } },
         },
         series: [
           {
@@ -74,7 +76,20 @@ export function UsageChart({ items }: { items: UsageDayStat[] }) {
             type: 'bar',
             data: items.map((item) => item.requests),
             barMaxWidth: 26,
-            itemStyle: { color: '#4d6bfe', borderRadius: [4, 4, 0, 0] },
+            itemStyle: {
+              color: {
+                type: 'linear',
+                x: 0,
+                y: 0,
+                x2: 0,
+                y2: 1,
+                colorStops: [
+                  { offset: 0, color: '#6a8bff' },
+                  { offset: 1, color: '#4d6bfe' },
+                ],
+              },
+              borderRadius: [4, 4, 0, 0],
+            },
             emphasis: { itemStyle: { color: '#3b58f0' } },
           },
         ],

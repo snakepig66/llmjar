@@ -10,10 +10,12 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type {
+  BuyerLeaderboardItem,
   LeaderboardRange,
   ModelLeaderboardItem,
   SellerLeaderboardItem,
   TrendDay,
+  VendorLeaderboardItem,
 } from '@/features/leaderboard/api'
 
 import { LeaderboardPage } from './leaderboard'
@@ -21,7 +23,19 @@ import { LeaderboardPage } from './leaderboard'
 interface Fixtures {
   modelItems: Record<LeaderboardRange, ModelLeaderboardItem[]>
   sellerItems: Record<LeaderboardRange, SellerLeaderboardItem[]>
+  buyerItems: Record<LeaderboardRange, BuyerLeaderboardItem[]>
+  vendorItems: Record<LeaderboardRange, VendorLeaderboardItem[]>
   trendItems: TrendDay[]
+}
+
+const RANGES: LeaderboardRange[] = ['24h', '7d', '30d']
+
+function emptyByRange<T>(): Record<LeaderboardRange, T[]> {
+  return { '24h': [], '7d': [], '30d': [] }
+}
+
+function rangeOf(url: string): LeaderboardRange {
+  return RANGES.find((range) => url.includes(`range=${range}`)) ?? '24h'
 }
 
 function defaultFixtures(): Fixtures {
@@ -71,6 +85,7 @@ function defaultFixtures(): Fixtures {
           tokens: 40_000,
         },
       ],
+      '30d': [],
     },
     sellerItems: {
       '24h': [
@@ -98,6 +113,44 @@ function defaultFixtures(): Fixtures {
           income_micro: 99_000_000,
         },
       ],
+      '30d': [],
+    },
+    buyerItems: {
+      '24h': [
+        {
+          rank: 1,
+          alias: '用户 #c3d4',
+          requests: 512,
+          success_rate_milli: 998,
+          tokens: 88_000,
+        },
+      ],
+      '7d': [],
+      '30d': [],
+    },
+    vendorItems: {
+      '24h': [
+        {
+          rank: 1,
+          vendor: 'deepseek',
+          display_name: 'DeepSeek',
+          requests: 700,
+          tokens: 60_000,
+          models: 3,
+          share_milli: 750,
+        },
+        {
+          rank: 2,
+          vendor: 'custom',
+          display_name: '',
+          requests: 150,
+          tokens: 20_000,
+          models: 1,
+          share_milli: 250,
+        },
+      ],
+      '7d': [],
+      '30d': [],
     },
     trendItems: [
       { date: '2026-10-24', requests: 12, tokens: 3_000 },
@@ -122,7 +175,7 @@ beforeEach(() => {
   fetchMock = vi.fn(async (input: RequestInfo | URL) => {
     const url = String(input)
     if (url.includes('/marketplace/leaderboard/models')) {
-      const range: LeaderboardRange = url.includes('range=7d') ? '7d' : '24h'
+      const range = rangeOf(url)
       return jsonResponse({
         success: true,
         data: {
@@ -135,7 +188,7 @@ beforeEach(() => {
       })
     }
     if (url.includes('/marketplace/leaderboard/sellers')) {
-      const range: LeaderboardRange = url.includes('range=7d') ? '7d' : '24h'
+      const range = rangeOf(url)
       return jsonResponse({
         success: true,
         data: {
@@ -144,6 +197,33 @@ beforeEach(() => {
           window_start: '2026-10-25T00:00:00+08:00',
           window_end: '2026-10-26T00:00:00+08:00',
           items: fixtures.sellerItems[range],
+        },
+      })
+    }
+    if (url.includes('/marketplace/leaderboard/buyers')) {
+      const range = rangeOf(url)
+      return jsonResponse({
+        success: true,
+        data: {
+          range,
+          window: 'sliding',
+          window_start: '2026-10-25T00:00:00+08:00',
+          window_end: '2026-10-26T00:00:00+08:00',
+          items: fixtures.buyerItems[range],
+        },
+      })
+    }
+    if (url.includes('/marketplace/leaderboard/vendors')) {
+      const range = rangeOf(url)
+      return jsonResponse({
+        success: true,
+        data: {
+          range,
+          window: 'sliding',
+          window_start: '2026-10-25T00:00:00+08:00',
+          window_end: '2026-10-26T00:00:00+08:00',
+          total_tokens: 80_000,
+          items: fixtures.vendorItems[range],
         },
       })
     }
@@ -256,15 +336,38 @@ describe('leaderboard page', () => {
     ).toBe('true')
   })
 
+  it('renders the buyer and vendor boards with aliases and shares', async () => {
+    renderPage()
+    await screen.findByText('用户 #c3d4')
+
+    const buyer = screen.getByText('用户 #c3d4').closest('li')!
+    expect(buyer.textContent).toContain('88,000')
+    expect(buyer.textContent).toContain('99.8%')
+
+    await screen.findByText('DeepSeek')
+    const deepseek = screen.getByText('DeepSeek').closest('li')!
+    expect(deepseek.textContent).toContain('60,000')
+    expect(deepseek.textContent).toContain('75.0%')
+
+    // The folded custom bucket shows the localized name, not the slug.
+    const custom = screen.getByText('自定义渠道').closest('li')!
+    expect(custom.textContent).toContain('20,000')
+    expect(custom.textContent).toContain('25.0%')
+  })
+
   it('shows empty states for both boards and the trend', async () => {
-    fixtures.modelItems = { '24h': [], '7d': [] }
-    fixtures.sellerItems = { '24h': [], '7d': [] }
+    fixtures.modelItems = emptyByRange()
+    fixtures.sellerItems = emptyByRange()
+    fixtures.buyerItems = emptyByRange()
+    fixtures.vendorItems = emptyByRange()
     fixtures.trendItems = []
 
     renderPage()
 
     expect(await screen.findByText('暂无模型数据')).toBeTruthy()
     expect(screen.getByText('暂无分享者数据')).toBeTruthy()
+    expect(screen.getByText('暂无买家数据')).toBeTruthy()
+    expect(screen.getByText('暂无渠道数据')).toBeTruthy()
     expect(screen.getByText('暂无趋势数据')).toBeTruthy()
   })
 })

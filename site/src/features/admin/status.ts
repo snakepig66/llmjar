@@ -16,15 +16,17 @@ export function adminListingStatus(status: string): AdminStatusView {
     case 'draft':
       return { label: labels.draft, tone: 'neutral' }
     case 'verifying':
-      return { label: labels.verifying, tone: 'neutral' }
+      return { label: labels.verifying, tone: 'warning' }
     case 'canary':
       return { label: labels.canary, tone: 'brand' }
     case 'live':
-      return { label: labels.live, tone: 'brand' }
+      return { label: labels.live, tone: 'success' }
     case 'paused':
-      return { label: labels.paused, tone: 'neutral' }
+      return { label: labels.paused, tone: 'warning' }
     case 'banned':
       return { label: labels.banned, tone: 'danger' }
+    case 'deleted':
+      return { label: labels.deleted, tone: 'neutral' }
     default:
       return { label: labels.unknown, tone: 'neutral' }
   }

@@ -5,6 +5,7 @@ import { cn } from '@/lib/cn'
 import type { SquareMetrics } from './api'
 import { capabilitiesOf } from './capabilities'
 import { copyText } from './clipboard'
+import { formatContext } from './format'
 import { modelLogo, withLogoVersion } from './model-logo'
 
 /** Formats integer micro-yuan per million tokens into clean display (e.g. 1000000 -> "¥1", 140000 -> "¥0.14"). */
@@ -167,8 +168,12 @@ export function CapabilityBadges({
 
   return (
     <div className="flex shrink-0 items-center gap-1.5 text-ink-3" aria-label="模型能力">
-      <span className="inline-flex items-center justify-center rounded px-1.5 py-0.5 text-[10px] font-medium bg-surface text-ink-3 border border-line select-none" title="支持文本">
-        文本
+      <span
+        className="inline-flex h-3.5 w-3.5 items-center justify-center text-[11px] font-semibold leading-none select-none"
+        title="支持文本"
+        aria-label="支持文本"
+      >
+        T
       </span>
       {hasVision && (
         <svg
@@ -350,7 +355,7 @@ export function LatencyThroughput({
           {throughput ? ` · 吞吐 ${throughput}` : ''}
         </span>
       ) : contextLength ? (
-        <span>上下文 {Math.round(contextLength / 1024)}K</span>
+        <span>上下文 {formatContext(contextLength)}</span>
       ) : (
         <span>{channelCount ?? 0} 个渠道在线</span>
       )}

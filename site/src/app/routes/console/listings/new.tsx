@@ -26,7 +26,6 @@ import {
   createListing,
   probeListing,
   sellerChannelKind,
-  sellerCommonAddressesQuery,
   sellerGroupsQuery,
   sellerListingsQuery,
   sellerVendorsQuery,
@@ -36,7 +35,6 @@ import {
   type WBAuthStatus,
   type SellerQuotaWindow,
   type SellerVendor,
-  type SellerCommonAddress,
   type CreateListingInput,
 } from '@/features/seller/api'
 import type {
@@ -55,20 +53,17 @@ import { parseYuanToMicro } from '@/features/seller/money-input'
 import { MultiplierSlider } from '@/features/seller/MultiplierSlider'
 import {
   buildVerificationMatrix,
-  canLeaveStep,
   canSubmit,
   CUSTOM_VENDOR_ID,
   DEFAULT_MULTIPLIER_MILLI,
   maskApiKey,
   parseApiKeys,
-  previousWizardStep,
   validApiKeys,
   validCustomURL,
   validModelMultiplier,
   validRequestHeaders,
   type VerificationCell,
   type WizardSnapshot,
-  type WizardStep,
 } from '@/features/seller/wizard'
 
 export const Route = createFileRoute('/console/listings/new')({
@@ -240,80 +235,25 @@ function flattenHours(availability: WizardForm['availability']): FlatHours {
   return { windows, valid, any }
 }
 
-function StepRail({
-  step,
-  onJump,
-}: {
-  step: number
-  onJump: (next: WizardStep) => void
-}) {
-  return (
-    <ol className="mt-6 grid grid-cols-1 gap-3 glass p-4 sm:grid-cols-3">
-      {page.steps.map((title, index) => {
-        const completed = index < step
-        const active = index === step
-        const disabled = index > step
-        return (
-          <li
-            key={title}
-            aria-current={active ? 'step' : undefined}
-            className={cn(
-              'rounded-md border p-3.5',
-              active ? 'border-brand bg-brand-soft/50' : 'border-white/70 bg-white/45 backdrop-blur-md',
-            )}
-          >
-            <button
-              type="button"
-              disabled={disabled}
-              onClick={() => onJump(index as WizardStep)}
-              className={cn(
-                'flex w-full items-center gap-2 text-left',
-                disabled ? 'cursor-not-allowed' : 'cursor-pointer',
-              )}
-            >
-              <span
-                aria-hidden="true"
-                className={cn(
-                  'grid h-6 w-6 shrink-0 place-items-center rounded-full border text-meta font-medium',
-                  completed
-                    ? 'border-transparent bg-brand-soft text-brand-ink'
-                    : active
-                      ? 'border-transparent bg-brand text-white'
-                      : 'glass-inset text-ink-3',
-                )}
-              >
-                {completed ? (
-                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                    <path
-                      d="M2.5 6.2l2.2 2.2 4.8-5"
-                      stroke="currentColor"
-                      strokeWidth="1.6"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                ) : (
-                  index + 1
-                )}
-              </span>
-              <span
-                className={cn(
-                  'text-body font-medium',
-                  completed || active ? 'text-ink' : 'text-ink-3',
-                )}
-              >
-                {title}
-              </span>
-            </button>
-          </li>
-        )
-      })}
-    </ol>
-  )
-}
-
 function endpointLabel(endpoint: string): string {
   return page.advanced.endpointNames[endpoint] ?? endpoint
+}
+
+/** Radio-dot indicator on the listing-mode cards. */
+function ModeCheck({ checked }: { checked: boolean }) {
+  return (
+    <span
+      aria-hidden="true"
+      className={cn(
+        'ml-auto grid h-5 w-5 shrink-0 place-items-center rounded-full border text-[11px] leading-none',
+        checked
+          ? 'border-brand bg-brand text-white'
+          : 'border-line bg-white/80 text-transparent',
+      )}
+    >
+      ✓
+    </span>
+  )
 }
 
 function TrustBadge({
@@ -351,57 +291,6 @@ function TrustBadge({
             </Tag>
           ))
         : null}
-    </div>
-  )
-}
-
-function CommonAddressList({
-  addresses,
-  pending,
-  error,
-  onPick,
-  onRetry,
-}: {
-  addresses: SellerCommonAddress[]
-  pending: boolean
-  error: boolean
-  onPick: (address: SellerCommonAddress) => void
-  onRetry: () => void
-}) {
-  return (
-    <div>
-      <h4 className="text-meta font-medium text-ink-3">{page.url.commonTitle}</h4>
-      <p className="mt-1 text-meta text-ink-3">{page.url.commonHint}</p>
-      {pending ? (
-        <div className="mt-2 flex flex-wrap gap-2" aria-busy="true">
-          {Array.from({ length: 4 }, (_, index) => (
-            <Skeleton key={index} className="h-9 w-44" />
-          ))}
-        </div>
-      ) : error ? (
-        <div className="mt-2 flex flex-wrap items-center gap-3">
-          <span className="text-meta text-danger">{page.url.commonError}</span>
-          <Button variant="secondary" size="sm" onClick={onRetry}>
-            {page.actions.retry}
-          </Button>
-        </div>
-      ) : addresses.length === 0 ? (
-        <p className="mt-2 text-meta text-ink-3">{page.url.commonEmpty}</p>
-      ) : (
-        <div className="mt-2 flex flex-wrap gap-2">
-          {addresses.map((address) => (
-            <button
-              key={address.host}
-              type="button"
-              onClick={() => onPick(address)}
-              className="flex items-center gap-2 glass px-3 py-2 text-left text-meta transition-colors hover:border-brand/40"
-            >
-              <span className="font-medium text-ink">{address.vendor_name || address.host}</span>
-              <span className="font-mono text-caption text-ink-3">{address.host}</span>
-            </button>
-          ))}
-        </div>
-      )}
     </div>
   )
 }
@@ -511,7 +400,6 @@ export function NewListingPage() {
   const toast = useToast()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const [step, setStep] = useState<WizardStep>(0)
   const [advancedOpen, setAdvancedOpen] = useState(false)
   const [multipliers, setMultipliers] = useState<Record<string, number>>({})
   const [upstreamAliases, setUpstreamAliases] = useState<Record<string, string>>({})
@@ -569,10 +457,8 @@ export function NewListingPage() {
   const firstKey = keys[0] ?? ''
 
   const vendors = useQuery(sellerVendorsQuery())
-  const commonAddresses = useQuery(sellerCommonAddressesQuery())
-  // P4: an existing group for the matched vendor means the new keys join that
+  const groups = useQuery(sellerGroupsQuery())  // P4: an existing group for the matched vendor means the new keys join that
   // logical channel instead of creating another one.
-  const groups = useQuery(sellerGroupsQuery())
   const allVendors = useMemo(() => vendors.data ?? [], [vendors.data])
   const matchedVendor = vendorForURL(values.url, allVendors)
   const existingGroup = useMemo(
@@ -863,33 +749,6 @@ export function NewListingPage() {
     }
   }
 
-  function handleNext() {
-    if (!canLeaveStep(step, snapshot)) return
-    if (step === 0) {
-      void form.trigger(['url', 'api_keys'])
-      setStep(1)
-      void probeAllKeys(true)
-      return
-    }
-    if (step === 1) {
-      void form.trigger(['models', 'concurrency', 'rpm', 'daily_cap_yuan', 'headers'])
-      setStep(2)
-      void probeAllKeys(true, values.models)
-      return
-    }
-  }
-
-  function handleJump(next: WizardStep) {
-    if (next <= step) {
-      setStep(next)
-    } else if (next === 1 && canLeaveStep(0, snapshot)) {
-      setStep(1)
-    } else if (next === 2 && canLeaveStep(0, snapshot) && canLeaveStep(1, snapshot)) {
-      setStep(2)
-      void probeAllKeys(true, values.models)
-    }
-  }
-
   function applyBatchMultiplier() {
     const parsed = Number(batchMultiplier)
     if (!Number.isFinite(parsed)) return
@@ -980,10 +839,6 @@ export function NewListingPage() {
     create.mutate(payloads)
   }
 
-  function pickCommonAddress(address: SellerCommonAddress) {
-    form.setValue('url', `https://${address.host}`, { shouldValidate: true, shouldDirty: true })
-  }
-
   function pickWorkBuddy() {
     form.setValue('url', 'https://copilot.tencent.com', {
       shouldValidate: true,
@@ -1012,17 +867,15 @@ export function NewListingPage() {
         const callable = new Set(probe.verified_models ?? probe.models ?? [])
         return values.models.some((model) => callable.has(model) || poolIds.has(model))
       })
-  const stepRequired = useMemo(() => {
-    if (step === 0) {
-      const filled = (validCustomURL(values.url) ? 1 : 0) + (hasPassedKey ? 1 : 0)
-      return { filled, total: 2, label: page.requiredCount(filled, 2) }
-    }
-    if (step === 1) {
-      const filled = values.models.length > 0 ? 1 : 0
-      return { filled, total: 1, label: page.requiredCount(filled, 1) }
-    }
-    return { filled: 1, total: 1, label: '全部就绪' }
-  }, [step, values.url, hasPassedKey, values.models])
+  // Single-page progress: the three required ingredients of a listing.
+  const readiness = useMemo(() => {
+    const items = [
+      { label: page.progress.url, done: validCustomURL(values.url) },
+      { label: page.progress.key, done: hasPassedKey },
+      { label: page.progress.models, done: values.models.length > 0 },
+    ]
+    return items
+  }, [values.url, hasPassedKey, values.models])
 
   return (
     <>
@@ -1030,57 +883,91 @@ export function NewListingPage() {
         title={page.title}
         lead={page.lead}
         actions={
-          <span title={page.requiredHint}>
-            <Tag tone={stepRequired.filled === stepRequired.total ? 'brand' : 'neutral'} dot>
-              {stepRequired.label}
-            </Tag>
-          </span>
+          <div className="flex flex-wrap gap-2" title={page.requiredHint}>
+            {readiness.map((item) => (
+              <Tag key={item.label} tone={item.done ? 'brand' : 'neutral'} dot>
+                {item.label}
+              </Tag>
+            ))}
+          </div>
         }
-      />
-      <StepRail
-        step={step}
-        onJump={handleJump}
       />
 
       <form
-        className="mt-6 glass p-6"
+        className="mt-6 space-y-6"
         onSubmit={(event) => event.preventDefault()}
       >
-        <header className="flex flex-wrap items-center justify-between gap-2 border-b border-line pb-4">
-          <div>
+        <section className="glass p-6">
+          <header className="border-b border-line pb-4">
             <h2 className="text-title font-semibold tracking-tight text-ink">
-              {page.steps[step]}
+              {page.steps[0]}
             </h2>
-            <p className="mt-1 text-meta leading-5 text-ink-3">{page.stepLead[step]}</p>
-          </div>
-          <span className="tabular-nums text-meta text-ink-3">0{step + 1} / 03</span>
-        </header>
-
-        <div className="pt-5">
-          {step === 0 ? (
-            <div className="space-y-8">
-              <section>
-                <div className="flex items-center gap-2">
-                  <span className="grid h-6 w-6 shrink-0 place-items-center rounded-md bg-brand-soft text-brand-ink">
-                    <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <p className="mt-1 text-meta leading-5 text-ink-3">{page.stepLead[0]}</p>
+          </header>
+          <div className="space-y-6 pt-5">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <button
+                  type="button"
+                  aria-pressed={!isWB}
+                  onClick={() => {
+                    if (isWB) switchToManual()
+                  }}
+                  className={cn(
+                    'flex items-center gap-3.5 rounded-xl border p-4 text-left transition-colors',
+                    !isWB
+                      ? 'border-brand bg-brand-soft'
+                      : 'border-line bg-white/85 hover:border-brand/50 hover:bg-white',
+                  )}
+                >
+                  <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg border border-line bg-white text-ink-2">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                      <circle cx="5.5" cy="10.5" r="3" stroke="currentColor" strokeWidth="1.4" />
                       <path
-                        d="M6.6 9.4a3 3 0 0 0 4.2.2l2.1-2.1a3 3 0 1 0-4.2-4.3L7.6 4.3"
-                        stroke="currentColor"
-                        strokeWidth="1.4"
-                        strokeLinecap="round"
-                      />
-                      <path
-                        d="M9.4 6.6a3 3 0 0 0-4.2-.2l-2.1 2.1a3 3 0 1 0 4.2 4.3l1.1-1.1"
+                        d="M7.8 8.2 12.5 3.5M10.5 5.5l1.8 1.8M12.5 3.5l.9.9"
                         stroke="currentColor"
                         strokeWidth="1.4"
                         strokeLinecap="round"
                       />
                     </svg>
                   </span>
-                  <h3 className="text-body font-semibold text-ink">{page.wb.section}</h3>
-                </div>
-                {isWB ? (
-                  <div className="mt-3 max-w-2xl rounded-xl border border-brand/30 bg-brand-soft/40 px-5 py-4">
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-body font-medium text-ink">{page.mode.key}</span>
+                    <span className="mt-0.5 block text-meta leading-5 text-ink-3">
+                      {page.mode.keyHint}
+                    </span>
+                  </span>
+                  <ModeCheck checked={!isWB} />
+                </button>
+                <button
+                  type="button"
+                  aria-pressed={isWB}
+                  onClick={() => {
+                    if (!isWB) pickWorkBuddy()
+                  }}
+                  className={cn(
+                    'flex items-center gap-3.5 rounded-xl border p-4 text-left transition-colors',
+                    isWB
+                      ? 'border-brand bg-brand-soft'
+                      : 'border-line bg-white/85 hover:border-brand/50 hover:bg-white',
+                  )}
+                >
+                  <img
+                    src="/vendors/workbuddy.svg"
+                    alt=""
+                    className="h-10 w-10 shrink-0 rounded-full"
+                  />
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-body font-medium text-ink">{page.mode.sub}</span>
+                    <span className="mt-0.5 block text-meta leading-5 text-ink-3">
+                      {page.mode.subHint}
+                    </span>
+                  </span>
+                  <ModeCheck checked={isWB} />
+                </button>
+              </div>
+
+              {isWB ? (
+                  <div className="max-w-2xl rounded-xl border border-brand/30 bg-brand-soft px-5 py-4">
                     <div className="flex items-start gap-3.5">
                       <img
                         src="/vendors/workbuddy.svg"
@@ -1096,13 +983,6 @@ export function NewListingPage() {
                         </div>
                         <p className="mt-0.5 text-meta leading-5 text-ink-3">{page.wb.lead}</p>
                       </div>
-                      <button
-                        type="button"
-                        onClick={switchToManual}
-                        className="shrink-0 text-meta text-ink-3 transition-colors hover:text-ink"
-                      >
-                        {page.wb.change}
-                      </button>
                     </div>
                     <div className="mt-4 border-t border-brand/15 pt-4">
                     {wbSession ? (
@@ -1153,89 +1033,14 @@ export function NewListingPage() {
                     </p>
                     </div>
                   </div>
-                ) : (
-                  <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                    <button
-                      type="button"
-                      onClick={pickWorkBuddy}
-                      className="group flex items-center gap-3.5 rounded-xl border border-line bg-white/70 p-4 text-left transition-colors hover:border-brand/50 hover:bg-white"
-                    >
-                      <img
-                        src="/vendors/workbuddy.svg"
-                        alt=""
-                        className="h-11 w-11 shrink-0 rounded-full"
-                      />
-                      <span className="min-w-0 flex-1">
-                        <span className="flex items-center gap-2">
-                          <span className="truncate text-body font-medium text-ink">
-                            WorkBuddy
-                          </span>
-                          <Tag tone="brand">{page.wb.oauthTag}</Tag>
-                        </span>
-                        <span className="mt-0.5 block truncate font-mono text-caption text-ink-3">
-                          copilot.tencent.com
-                        </span>
-                      </span>
-                      <svg
-                        width="16"
-                        height="16"
-                        viewBox="0 0 16 16"
-                        fill="none"
-                        aria-hidden="true"
-                        className="shrink-0 text-ink-3 transition-colors group-hover:text-brand"
-                      >
-                        <path
-                          d="M6 3.5 10.5 8 6 12.5"
-                          stroke="currentColor"
-                          strokeWidth="1.5"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        />
-                      </svg>
-                    </button>
-                    <div className="flex items-center gap-3.5 rounded-xl border border-dashed border-line p-4 opacity-60">
-                      <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-dashed border-line text-lg text-ink-3">
-                        +
-                      </span>
-                      <span className="text-meta text-ink-3">{page.wb.more}</span>
-                    </div>
-                  </div>
-                )}
-              </section>
+                ) : null}
 
               {!isWB ? (
                 <>
-                  <div className="flex items-center gap-3" aria-hidden="true">
-                    <span className="h-px flex-1 bg-line" />
-                    <span className="text-caption text-ink-3">{page.wb.orManual}</span>
-                    <span className="h-px flex-1 bg-line" />
-                  </div>
-
                   <section className="max-w-2xl space-y-4">
-                    <div className="flex items-center gap-2">
-                      <span className="grid h-6 w-6 shrink-0 place-items-center rounded-md bg-ink-3/10 text-ink-3">
-                        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                          <circle
-                            cx="5.5"
-                            cy="10.5"
-                            r="3"
-                            stroke="currentColor"
-                            strokeWidth="1.4"
-                          />
-                          <path
-                            d="M7.8 8.2 12.5 3.5M10.5 5.5l1.8 1.8M12.5 3.5l.9.9"
-                            stroke="currentColor"
-                            strokeWidth="1.4"
-                            strokeLinecap="round"
-                          />
-                        </svg>
-                      </span>
-                      <h3 className="text-body font-semibold text-ink">{page.key.sectionTitle}</h3>
-                    </div>
                 <Field
                   label={page.url.label}
                   htmlFor="new-listing-url"
-                  hint={page.url.hint}
                   error={form.formState.errors.url?.message}
                 >
                   <Input
@@ -1260,7 +1065,7 @@ export function NewListingPage() {
                     spellCheck={false}
                     placeholder={page.key.placeholder}
                     aria-invalid={Boolean(form.formState.errors.api_keys) || undefined}
-                    className="w-full rounded-md border border-white/70 bg-white/55 backdrop-blur-md px-4 py-3 font-mono text-body text-ink transition-colors placeholder:text-ink-3 focus:border-brand/60 focus:bg-white/85 focus:outline-none focus:ring-[3px] focus:ring-brand/20 aria-[invalid=true]:border-danger"
+                    className="w-full rounded-md border border-line-strong bg-white/85 backdrop-blur-md px-4 py-3 font-mono text-body text-ink transition-colors placeholder:text-ink-3 focus:border-brand/60 focus:bg-white focus:outline-none focus:ring-[3px] focus:ring-brand/20 aria-[invalid=true]:border-danger"
                     {...form.register('api_keys')}
                   />
                 </Field>
@@ -1274,24 +1079,9 @@ export function NewListingPage() {
                     error={recognizeError}
                   />
                 </div>
-                <div className="mt-3 space-y-2">
-                  <div className="flex items-center justify-between text-meta text-ink-3">
-                    <span>Key 连通性测试</span>
-                    {keys.length > 0 ? (
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        size="sm"
-                        disabled={probingKeys || !validCustomURL(values.url)}
-                        loading={probingKeys}
-                        onClick={() => void probeAllKeys(true)}
-                      >
-                        检测全部 Key
-                      </Button>
-                    ) : null}
-                  </div>
-                  {keys.length > 0 ? (
-                    <div className="divide-y divide-line/60 rounded-md border border-line bg-white/50">
+                {keys.length > 0 ? (
+                  <div className="mt-3 space-y-2">
+                    <div className="divide-y divide-line rounded-md border border-line bg-white/70">
                       {keys.map((k) => {
                         const probe = keyProbes[k]
                         const isOk = probe?.key_valid
@@ -1331,13 +1121,11 @@ export function NewListingPage() {
                         )
                       })}
                     </div>
-                  ) : (
-                    <p className="text-caption text-ink-3">粘贴 Key 后将自动向上游发送 max_tokens=1 探活请求测试连通性。</p>
-                  )}
-                  {!hasPassedKey && keys.length > 0 && !probingKeys ? (
-                    <p className="text-caption text-warn">至少一个 Key 通过连通性测试才能进入下一步。</p>
-                  ) : null}
-                </div>
+                    {!hasPassedKey && !probingKeys ? (
+                      <p className="text-caption text-warn">至少一个 Key 连通后才能上架。</p>
+                    ) : null}
+                  </div>
+                ) : null}
                 {trust?.trust === 'blocked' ? (
                   <p className="text-meta leading-5 text-danger" role="alert">
                     {page.trust.blocked}
@@ -1427,21 +1215,19 @@ export function NewListingPage() {
                   </div>
                 ) : null}
                   </section>
-
-                  <CommonAddressList
-                    addresses={commonAddresses.data ?? []}
-                    pending={commonAddresses.isPending}
-                    error={commonAddresses.isError}
-                    onPick={pickCommonAddress}
-                    onRetry={() => void commonAddresses.refetch()}
-                  />
                 </>
               ) : null}
-            </div>
-          ) : null}
+          </div>
+        </section>
 
-          {step === 1 ? (
-            <div className="space-y-6">
+        <section className="glass p-6">
+          <header className="border-b border-line pb-4">
+            <h2 className="text-title font-semibold tracking-tight text-ink">
+              {page.steps[1]}
+            </h2>
+            <p className="mt-1 text-meta leading-5 text-ink-3">{page.stepLead[1]}</p>
+          </header>
+          <div className="space-y-6 pt-5">
               <div className="flex flex-wrap items-end justify-between gap-3">
                 <div>
                   <h3 className="text-body font-semibold text-ink">{page.models.title}</h3>
@@ -1469,7 +1255,7 @@ export function NewListingPage() {
               </div>
 
               {values.models.length === 0 ? (
-                <div className="rounded-md border border-brand/20 bg-brand-soft/40 p-3 text-meta text-ink-2">
+                <div className="rounded-md border border-brand/40 bg-brand-soft p-3 text-meta text-ink-2">
                   从模型池里勾选你的 Key 能用的模型
                 </div>
               ) : null}
@@ -1624,7 +1410,7 @@ export function NewListingPage() {
                   </div>
 
                   {requiresPlanTerms ? (
-                    <div className="rounded-md border border-brand/25 bg-brand-soft/40 px-4 py-3">
+                    <div className="rounded-md border border-brand/25 bg-brand-soft px-4 py-3">
                       <h4 className="text-meta font-medium text-ink">{page.plan.title}</h4>
                       <p className="mt-1 text-meta leading-5 text-ink-2">{page.plan.windows}</p>
                       {quotaWindowText ? (
@@ -1714,7 +1500,7 @@ export function NewListingPage() {
                           rows={3}
                           spellCheck={false}
                           placeholder={'X-Custom-Header: value'}
-                          className="w-full rounded-md border border-white/70 bg-white/55 backdrop-blur-md px-4 py-3 font-mono text-body text-ink transition-colors placeholder:text-ink-3 focus:border-brand/60 focus:bg-white/85 focus:outline-none focus:ring-[3px] focus:ring-brand/20 aria-[invalid=true]:border-danger"
+                          className="w-full rounded-md border border-line-strong bg-white/85 backdrop-blur-md px-4 py-3 font-mono text-body text-ink transition-colors placeholder:text-ink-3 focus:border-brand/60 focus:bg-white focus:outline-none focus:ring-[3px] focus:ring-brand/20 aria-[invalid=true]:border-danger"
                           {...form.register('headers')}
                         />
                       </Field>
@@ -1757,35 +1543,34 @@ export function NewListingPage() {
                   </div>
                 </div>
               </details>
+          </div>
+        </section>
+
+        <section className="glass p-6">
+          <header className="flex flex-wrap items-end justify-between gap-3 border-b border-line pb-4">
+            <div>
+              <h2 className="text-title font-semibold tracking-tight text-ink">
+                {page.steps[2]}
+              </h2>
+              <p className="mt-1 text-meta leading-5 text-ink-3">{page.stepLead[2]}</p>
             </div>
-          ) : null}
-
-          {step === 2 ? (
-            <div className="space-y-5">
-              <div className="flex flex-wrap items-end justify-between gap-3">
-                <div>
-                  <h3 className="text-body font-semibold text-ink">{page.verify.title}</h3>
-                  <p className="mt-1 text-meta text-ink-3">{page.verify.lead}</p>
-                </div>
-                <div className="flex items-center gap-2">
-                  {!isWB ? (
-                    <>
-                      <span className="text-meta tabular-nums text-ink-3">
-                        {page.verify.passed(passedCount, verification.length)}
-                      </span>
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        loading={probingKeys}
-                        onClick={() => void probeAllKeys(true, values.models)}
-                      >
-                        {probingKeys ? page.verify.rechecking : page.verify.recheck}
-                      </Button>
-                    </>
-                  ) : null}
-                </div>
+            {!isWB ? (
+              <div className="flex items-center gap-2">
+                <span className="text-meta tabular-nums text-ink-3">
+                  {page.verify.passed(passedCount, verification.length)}
+                </span>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  loading={probingKeys}
+                  onClick={() => void probeAllKeys(true, values.models)}
+                >
+                  {probingKeys ? page.verify.rechecking : page.verify.recheck}
+                </Button>
               </div>
-
+            ) : null}
+          </header>
+          <div className="space-y-5 pt-5">
               {isWB ? (
                 <p className="text-meta leading-5 text-ink-3">{page.wb.verifyNote}</p>
               ) : keys.length === 0 || values.models.length === 0 ? (
@@ -1847,8 +1632,6 @@ export function NewListingPage() {
               </div>
               <p className="text-meta leading-5 text-ink-3">{page.verify.publishHint}</p>
               <p className="text-meta leading-5 text-ink-3">{page.verify.draftHint}</p>
-            </div>
-          ) : null}
 
           {duplicate ? (
             duplicate.kind === 'own' ? (
@@ -1888,35 +1671,8 @@ export function NewListingPage() {
               {submitError}
             </p>
           ) : null}
-        </div>
-
-        <footer className="mt-6 flex items-center justify-between gap-2 border-t border-line pt-4">
-          <div className="text-meta text-ink-3">
-            {step === 0 && !hasPassedKey && keys.length > 0 ? (
-              <span className="text-warn">需至少一个 Key 通过连通性测试</span>
-            ) : null}
           </div>
-          <div className="flex items-center gap-2">
-            {step > 0 ? (
-              <Button
-                variant="secondary"
-                onClick={() => setStep(previousWizardStep(step))}
-                disabled={create.isPending}
-              >
-                {page.actions.back}
-              </Button>
-            ) : null}
-            {step < 2 ? (
-              <Button
-                variant="primary"
-                onClick={handleNext}
-                disabled={!canLeaveStep(step, snapshot) || probingKeys}
-              >
-                {page.actions.next}
-              </Button>
-            ) : null}
-          </div>
-        </footer>
+        </section>
       </form>
     </>
   )

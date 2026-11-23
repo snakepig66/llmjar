@@ -141,7 +141,7 @@ function PayoutDialog({
     >
       <div className="space-y-4">
         {seller?.progress.payout_account_bound ? (
-          <div className="rounded-md border border-line bg-white/50 p-3 text-meta text-ink-2">
+          <div className="rounded-md border border-line bg-white/70 p-3 text-meta text-ink-2">
             <span className="font-medium text-ink">打款目标：</span>
             <span>
               {isWx ? '微信支付' : '支付宝'}

@@ -521,13 +521,15 @@ func seedProbeChannel(t *testing.T, db *gorm.DB, slug, baseURL string, rows []Ch
 }
 
 // probeData calls POST /seller/listings/probe and returns its data envelope.
+// seedProbeChannel rows are official-kind, which is admin-only, so the probe
+// runs as root.
 func probeData(t *testing.T, f *sellerAPIFixture, vendorID, apiKey string, models []string) map[string]any {
 	t.Helper()
-	w := f.do(t, http.MethodPost, "/api/marketplace/seller/listings/probe", map[string]any{
+	w := f.doRole(t, http.MethodPost, "/api/marketplace/seller/listings/probe", map[string]any{
 		"vendor_id": vendorID,
 		"api_key":   apiKey,
 		"models":    models,
-	}, int(f.sellerID))
+	}, int(f.sellerID), common.RoleRootUser)
 	require.Equal(t, http.StatusOK, w.Code)
 	assert.NotContains(t, w.Body.String(), apiKey, "§2.3: probe never echoes the key")
 	return decodeSellerBody(t, w)["data"].(map[string]any)

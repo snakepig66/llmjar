@@ -77,6 +77,7 @@ export function sellerErrorMessage(error: unknown): string {
   }
   if (match(raw, ['already listed', 'duplicate key'])) return errors.duplicateKey
   if (match(raw, ['payout account is not bound'])) return errors.payoutAccountRequired
+  if (match(raw, ['platform self-operated'])) return errors.officialSelfOperated
   if (match(raw, ['seller is not active', 'not active'])) return errors.notActive
   if (match(raw, ['vendor is not whitelisted', 'not whitelisted'])) return errors.vendorUnknown
   if (match(raw, ['not served by this vendor', 'not served by vendor'])) return errors.modelUnknown

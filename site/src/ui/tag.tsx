@@ -3,18 +3,18 @@ import type { ReactNode } from 'react'
 import { cn } from '@/lib/cn'
 
 /**
- * `success` and `warning` are deprecated aliases kept only so untouched pages
- * keep compiling: success renders like brand (blue) and warning like neutral.
- * Page components should express those semantics with their own dot + text.
+ * Muted semantic tones: saturation stays low to fit the palette, but
+ * warning/success/danger keep enough hue to signal state at a glance.
+ * Pair with `dot` for a status marker.
  */
 export type TagTone = 'neutral' | 'brand' | 'success' | 'warning' | 'danger'
 
 const tones: Record<TagTone, string> = {
-  neutral: 'bg-white/60 text-ink-2 ring-1 ring-inset ring-line',
+  neutral: 'bg-white/80 text-ink-2 ring-1 ring-inset ring-line',
   brand: 'bg-brand-soft text-brand-ink',
-  success: 'bg-brand-soft text-brand-ink',
-  warning: 'bg-white/60 text-ink-2 ring-1 ring-inset ring-line',
-  danger: 'bg-danger/10 text-danger',
+  success: 'bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-200/60',
+  warning: 'bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-200/60',
+  danger: 'bg-rose-50 text-rose-700 ring-1 ring-inset ring-rose-200/60',
 }
 
 export interface TagProps {

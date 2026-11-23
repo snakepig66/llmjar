@@ -60,8 +60,8 @@ export function RecordsSummaryBar({ items, loading = false, className }: Records
       {shown.map((item, index) =>
         loading ? (
           <div key={`summary-skeleton-${index}`} className="min-w-0 lg:first:pl-0 lg:pl-4">
-            <div className="h-3 w-14 animate-pulse rounded-sm bg-white/60 motion-reduce:animate-none" />
-            <div className="mt-1 h-5 w-20 animate-pulse rounded-sm bg-white/60 motion-reduce:animate-none" />
+            <div className="h-3 w-14 animate-pulse rounded-sm bg-white/80 motion-reduce:animate-none" />
+            <div className="mt-1 h-5 w-20 animate-pulse rounded-sm bg-white/80 motion-reduce:animate-none" />
           </div>
         ) : (
           <div

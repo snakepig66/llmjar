@@ -27,6 +27,14 @@ describe('formatYuan', () => {
     expect(formatYuan(1_234_560)).toBe('¥1.23456')
   })
 
+  it('rounds to maxDecimals when a lower precision is requested', () => {
+    expect(formatYuan(610_630_563, 2)).toBe('¥610.63')
+    expect(formatYuan(1_235_000, 2)).toBe('¥1.24')
+    expect(formatYuan(-1_235_000, 2)).toBe('-¥1.24')
+    expect(formatYuan(4_999, 2)).toBe('¥0')
+    expect(formatYuan(1_500_000, 2)).toBe('¥1.50')
+  })
+
   it('groups the integer part with commas', () => {
     expect(formatYuan(1_234_567_890)).toBe('¥1,234.56789')
   })

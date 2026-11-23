@@ -3,15 +3,19 @@ import { createFileRoute, useNavigate } from '@tanstack/react-router'
 
 import { copy } from '@/copy'
 import type {
+  BuyerLeaderboardItem,
   LeaderboardRange,
   LeaderboardTrend,
   ModelLeaderboardItem,
   SellerLeaderboardItem,
+  VendorLeaderboardItem,
 } from '@/features/leaderboard/api'
 import {
+  leaderboardBuyersQuery,
   leaderboardModelsQuery,
   leaderboardSellersQuery,
   leaderboardTrendQuery,
+  leaderboardVendorsQuery,
 } from '@/features/leaderboard/api'
 import { formatCount } from '@/features/market/format'
 import { QueryError } from '@/features/market/query-error'
@@ -26,8 +30,9 @@ interface LeaderboardSearch {
 const validateSearch = (
   search: Record<string, unknown>,
 ): LeaderboardSearch => {
-  if (search.range === '7d') return { range: '7d' }
-  if (search.range === '24h') return { range: '24h' }
+  if (search.range === '7d' || search.range === '24h' || search.range === '30d') {
+    return { range: search.range }
+  }
   return {}
 }
 
@@ -38,7 +43,19 @@ export const Route = createFileRoute('/leaderboard')({
 
 const page = copy.pages.leaderboard
 
-const RANGES: LeaderboardRange[] = ['24h', '7d']
+const RANGES: readonly LeaderboardRange[] = ['24h', '7d', '30d']
+
+const RANGE_LABELS: Record<LeaderboardRange, string> = {
+  '24h': page.range24h,
+  '7d': page.range7d,
+  '30d': page.range30d,
+}
+
+const RANGE_LEADS: Record<LeaderboardRange, string> = {
+  '24h': page.lead24h,
+  '7d': page.lead7d,
+  '30d': page.lead30d,
+}
 
 /** Thousandths of a percent, e.g. 995 -> "99.5%"; no sample -> 暂无数据. */
 function formatRate(milli: number | null | undefined): string {
@@ -268,6 +285,242 @@ function SellerBoard({
   )
 }
 
+/** Thin underline progress bar under a board row, percent of the top row. */
+function ShareBar({ percent, color }: { percent: number; color?: string }) {
+  return (
+    <div className="mt-1.5 h-[3px] w-full overflow-hidden rounded-full bg-bg-soft">
+      <div
+        className="h-full rounded-full bg-brand"
+        style={{
+          width: `${Math.min(100, Math.max(0, percent))}%`,
+          ...(color ? { backgroundColor: color } : {}),
+        }}
+      />
+    </div>
+  )
+}
+
+function BuyerBoard({
+  items,
+  pending,
+  failed,
+  retrying,
+  onRetry,
+}: {
+  items: BuyerLeaderboardItem[]
+  pending: boolean
+  failed: boolean
+  retrying: boolean
+  onRetry: () => void
+}) {
+  const maxTokens = Math.max(1, ...items.map((item) => item.tokens))
+  return (
+    <Board title={page.buyers.title} hint={page.buyers.hint}>
+      {pending ? (
+        <Loading />
+      ) : failed ? (
+        <QueryError
+          title={page.buyers.errorTitle}
+          reason={page.buyers.errorReason}
+          onRetry={onRetry}
+          retrying={retrying}
+        />
+      ) : items.length === 0 ? (
+        <Empty title={page.buyers.emptyTitle} reason={page.buyers.emptyReason} />
+      ) : (
+        <>
+          <div className="mt-2 flex items-baseline gap-x-3 border-b border-line pb-1.5 text-caption text-ink-3">
+            <span className="w-6 shrink-0 text-center">{page.buyers.rank}</span>
+            <span className="min-w-0 flex-1">{page.buyers.alias}</span>
+            <span className="shrink-0">{page.buyers.tokens}</span>
+          </div>
+          <ul>
+            {items.map((item) => (
+              <li
+                key={`${item.rank}-${item.alias}`}
+                className="border-b border-line py-3 last:border-b-0"
+              >
+                <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                  <span
+                    className={cn(
+                      'w-6 shrink-0 text-center text-body tabular-nums',
+                      rankTone(item.rank),
+                    )}
+                  >
+                    {item.rank}
+                  </span>
+                  <span
+                    className="min-w-0 flex-1 truncate text-body font-medium text-ink"
+                    title={item.alias}
+                  >
+                    {item.alias}
+                  </span>
+                  <span className="shrink-0 whitespace-nowrap text-caption text-ink-3">
+                    {page.buyers.tokens}{' '}
+                    <span className="text-meta tabular-nums text-ink">
+                      {formatCount(item.tokens)}
+                    </span>
+                  </span>
+                </div>
+                <dl className="mt-1 flex flex-wrap gap-x-4 gap-y-1 pl-9 text-caption text-ink-3">
+                  <div className="flex items-baseline gap-1">
+                    <dt>{page.buyers.requests}</dt>
+                    <dd className="tabular-nums text-ink-2">{formatCount(item.requests)}</dd>
+                  </div>
+                  <div className="flex items-baseline gap-1">
+                    <dt>{page.buyers.success}</dt>
+                    <dd
+                      className={cn(
+                        'tabular-nums',
+                        hasRate(item.success_rate_milli) ? 'text-ink-2' : 'text-ink-3',
+                      )}
+                    >
+                      {formatRate(item.success_rate_milli)}
+                    </dd>
+                  </div>
+                </dl>
+                <div className="pl-9">
+                  <ShareBar percent={(item.tokens / maxTokens) * 100} />
+                </div>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+    </Board>
+  )
+}
+
+/** Board colors for the vendor share strip, cycling by rank. */
+const VENDOR_COLORS = ['#4d6bfe', '#6a8bff', '#2f4bd8', '#16a34a', '#f59e0b', '#38bdf8', '#94a3c8']
+
+function vendorColor(rank: number): string {
+  return VENDOR_COLORS[(rank - 1) % VENDOR_COLORS.length]
+}
+
+function VendorBoard({
+  items,
+  totalTokens,
+  pending,
+  failed,
+  retrying,
+  onRetry,
+}: {
+  items: VendorLeaderboardItem[]
+  totalTokens: number
+  pending: boolean
+  failed: boolean
+  retrying: boolean
+  onRetry: () => void
+}) {
+  return (
+    <Board title={page.vendors.title} hint={page.vendors.hint}>
+      {pending ? (
+        <Loading />
+      ) : failed ? (
+        <QueryError
+          title={page.vendors.errorTitle}
+          reason={page.vendors.errorReason}
+          onRetry={onRetry}
+          retrying={retrying}
+        />
+      ) : items.length === 0 ? (
+        <Empty title={page.vendors.emptyTitle} reason={page.vendors.emptyReason} />
+      ) : (
+        <>
+          <div className="mt-3 flex items-baseline justify-end gap-1.5">
+            <span className="text-h3 font-semibold tabular-nums text-ink">
+              {formatCount(totalTokens)}
+            </span>
+            <span className="text-caption text-ink-3">{page.vendors.tokens}</span>
+          </div>
+          <div
+            className="mt-2 flex h-2 w-full overflow-hidden rounded-full bg-bg-soft"
+            role="img"
+            aria-label={page.vendors.title}
+          >
+            {items.map((item) => (
+              <div
+                key={item.vendor}
+                className="h-full"
+                style={{
+                  width: `${item.share_milli / 10}%`,
+                  backgroundColor: vendorColor(item.rank),
+                }}
+                title={`${item.display_name || page.vendors.custom} ${(item.share_milli / 10).toFixed(1)}%`}
+              />
+            ))}
+          </div>
+          <div className="mt-2 flex items-baseline gap-x-3 border-b border-line pb-1.5 pt-2 text-caption text-ink-3">
+            <span className="w-6 shrink-0 text-center">{page.vendors.rank}</span>
+            <span className="min-w-0 flex-1">{page.vendors.vendor}</span>
+            <span className="shrink-0">{page.vendors.tokens}</span>
+          </div>
+          <ul>
+            {items.map((item) => (
+              <li
+                key={item.vendor}
+                className="border-b border-line py-3 last:border-b-0"
+              >
+                <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                  <span
+                    className={cn(
+                      'w-6 shrink-0 text-center text-body tabular-nums',
+                      rankTone(item.rank),
+                    )}
+                  >
+                    {item.rank}
+                  </span>
+                  <span className="flex min-w-0 flex-1 items-center gap-2">
+                    <span
+                      aria-hidden="true"
+                      className="h-2 w-2 shrink-0 rounded-full"
+                      style={{ backgroundColor: vendorColor(item.rank) }}
+                    />
+                    <span
+                      className="truncate text-body font-medium text-ink"
+                      title={item.vendor}
+                    >
+                      {item.vendor === 'custom'
+                        ? page.vendors.custom
+                        : item.display_name || item.vendor}
+                    </span>
+                  </span>
+                  <span className="shrink-0 whitespace-nowrap text-caption text-ink-3">
+                    {page.vendors.tokens}{' '}
+                    <span className="text-meta tabular-nums text-ink">
+                      {formatCount(item.tokens)}
+                    </span>
+                  </span>
+                  <span className="shrink-0 whitespace-nowrap text-meta tabular-nums text-ink-2">
+                    {(item.share_milli / 10).toFixed(1)}%
+                  </span>
+                </div>
+                <dl className="mt-1 flex flex-wrap gap-x-4 gap-y-1 pl-9 text-caption text-ink-3">
+                  <div className="flex items-baseline gap-1">
+                    <dt>{page.vendors.requests}</dt>
+                    <dd className="tabular-nums text-ink-2">{formatCount(item.requests)}</dd>
+                  </div>
+                  <div className="flex items-baseline gap-1">
+                    <dt>{page.vendors.models}</dt>
+                    <dd className="tabular-nums text-ink-2">{formatCount(item.models)}</dd>
+                  </div>
+                </dl>
+                <div className="pl-9">
+                  <ShareBar
+                    percent={item.share_milli / 10}
+                    color={vendorColor(item.rank)}
+                  />
+                </div>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+    </Board>
+  )
+}
+
 function TrendChart({ trend }: { trend: LeaderboardTrend }) {
   const items = trend.items
   const maxRequests = Math.max(1, ...items.map((item) => item.requests))
@@ -348,6 +601,8 @@ export function LeaderboardPage() {
 
   const models = useQuery(leaderboardModelsQuery(range))
   const sellers = useQuery(leaderboardSellersQuery(range))
+  const buyers = useQuery(leaderboardBuyersQuery(range))
+  const vendors = useQuery(leaderboardVendorsQuery(range))
   const trend = useQuery(leaderboardTrendQuery(30))
 
   function selectRange(next: LeaderboardRange) {
@@ -364,7 +619,7 @@ export function LeaderboardPage() {
     <div className="mx-auto w-full max-w-[1200px] px-5 py-12 sm:px-6 sm:py-16">
       <PageHeader
         title={page.title}
-        lead={range === '7d' ? page.lead7d : page.lead24h}
+        lead={RANGE_LEADS[range]}
         actions={
           <div
             role="tablist"
@@ -384,7 +639,7 @@ export function LeaderboardPage() {
                     : 'rounded-md px-3 py-1.5 text-meta text-ink-2 transition-colors hover:text-ink'
                 }
               >
-                {value === '24h' ? page.range24h : page.range7d}
+                {RANGE_LABELS[value]}
               </button>
             ))}
           </div>
@@ -399,12 +654,27 @@ export function LeaderboardPage() {
           retrying={models.isFetching}
           onRetry={() => void models.refetch()}
         />
+        <VendorBoard
+          items={vendors.data?.items ?? []}
+          totalTokens={vendors.data?.total_tokens ?? 0}
+          pending={vendors.isPending}
+          failed={vendors.isError}
+          retrying={vendors.isFetching}
+          onRetry={() => void vendors.refetch()}
+        />
         <SellerBoard
           items={sellers.data?.items ?? []}
           pending={sellers.isPending}
           failed={sellers.isError}
           retrying={sellers.isFetching}
           onRetry={() => void sellers.refetch()}
+        />
+        <BuyerBoard
+          items={buyers.data?.items ?? []}
+          pending={buyers.isPending}
+          failed={buyers.isError}
+          retrying={buyers.isFetching}
+          onRetry={() => void buyers.refetch()}
         />
       </div>
 

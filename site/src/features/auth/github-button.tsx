@@ -49,7 +49,7 @@ export function GithubButton({ redirectTo, onError, className }: GithubButtonPro
         onClick={() => void handleClick()}
         disabled={disabled}
         className={cn(
-          'inline-flex h-12 w-full items-center justify-center gap-2 rounded-full border border-white/70 bg-white/70 px-5 text-body font-medium text-ink transition-colors',
+          'inline-flex h-12 w-full items-center justify-center gap-2 rounded-full border border-line bg-white/70 px-5 text-body font-medium text-ink transition-colors',
           'hover:bg-brand/[0.06] disabled:cursor-not-allowed disabled:opacity-50',
         )}
       >

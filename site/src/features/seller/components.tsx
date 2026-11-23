@@ -13,7 +13,7 @@ export function Skeleton({ className }: { className?: string }) {
   return (
     <span
       aria-hidden="true"
-      className={cn('block animate-pulse rounded-sm bg-white/60', className)}
+      className={cn('block animate-pulse rounded-sm bg-white/80', className)}
     />
   )
 }
@@ -114,7 +114,7 @@ export function Field({
 }
 
 export const selectClass =
-  'h-12 w-full rounded-md border border-white/70 bg-white/55 backdrop-blur-md px-4 text-body text-ink transition-colors focus:border-brand/60 focus:bg-white/85 focus:outline-none focus:ring-[3px] focus:ring-brand/20 disabled:cursor-not-allowed disabled:bg-white/35 disabled:text-ink-3'
+  'h-12 w-full rounded-md border border-line-strong bg-white/85 backdrop-blur-md px-4 text-body text-ink transition-colors focus:border-brand/60 focus:bg-white focus:outline-none focus:ring-[3px] focus:ring-brand/20 disabled:cursor-not-allowed disabled:bg-bg-subtle disabled:text-ink-3'
 
 export function SectionHeading({
   title,

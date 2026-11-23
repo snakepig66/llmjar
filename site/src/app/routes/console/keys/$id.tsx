@@ -297,7 +297,7 @@ function KeyDetailContent({ tokenId, detail }: { tokenId: number; detail: KeyDet
 
       {token.key_type === 'standard' ? (
         <Section className="mt-9" title="可用模型" hint="普通密钥的模型范围">
-          <div className="rounded-lg border border-brand/30 bg-brand-soft/40 px-4 py-3 text-meta text-ink-2">
+          <div className="rounded-lg border border-brand/30 bg-brand-soft px-4 py-3 text-meta text-ink-2">
             普通密钥默认已开放模型广场的所有自营模型，开箱即用，走平台自营渠道分发，无需在此手动增删模型。
           </div>
         </Section>
@@ -520,7 +520,7 @@ function KeyLimitsSection({ tokenId, token }: { tokenId: number; token: TokenRec
             id="key-limits-allow-ips"
             rows={3}
             spellCheck={false}
-            className="w-full resize-y rounded-md border border-white/70 bg-white/55 backdrop-blur-md px-3 py-2 font-mono text-meta text-ink transition-colors placeholder:text-ink-3 focus:border-brand/60 focus:bg-white/85 focus:outline-none focus:ring-[3px] focus:ring-brand/20"
+            className="w-full resize-y rounded-md border border-line-strong bg-white/85 backdrop-blur-md px-3 py-2 font-mono text-meta text-ink transition-colors placeholder:text-ink-3 focus:border-brand/60 focus:bg-white focus:outline-none focus:ring-[3px] focus:ring-brand/20"
             placeholder={page.limits.allowIpsPlaceholder}
             value={allowIps}
             onChange={(event) => setAllowIps(event.target.value)}

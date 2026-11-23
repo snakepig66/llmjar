@@ -84,9 +84,10 @@ function toOptionalBool(value: unknown): boolean | undefined {
   return undefined
 }
 
-/** ms → "820 ms"; 0 = 无数据 → "—". */
+/** ms → "820 ms" / "1.9 s"; 0 = 无数据 → "—". */
 function formatAvg(ms: number): string {
-  return ms > 0 ? `${Math.round(ms)} ms` : page.dash
+  if (ms <= 0) return page.dash
+  return ms >= 1000 ? `${(ms / 1000).toFixed(1)} s` : `${Math.round(ms)} ms`
 }
 
 function ShareRecordsPage() {
@@ -241,7 +242,7 @@ function ShareRecordsPage() {
         <Link
           to="/console/records"
           search={{ preset: '7d', page: 1, page_size: 20 }}
-          className="inline-flex h-9 shrink-0 items-center whitespace-nowrap rounded-full px-4 text-body font-medium text-ink-2 transition-colors hover:bg-white/60 hover:text-ink"
+          className="inline-flex h-9 shrink-0 items-center whitespace-nowrap rounded-full px-4 text-body font-medium text-ink-2 transition-colors hover:bg-white/80 hover:text-ink"
         >
           我的调用（消费）
         </Link>

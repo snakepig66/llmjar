@@ -259,7 +259,7 @@ export function ModelPicker({
                           key={model.model}
                           className={cn(
                             'flex flex-wrap items-center gap-x-3 gap-y-2 px-3 py-2 transition-colors',
-                            checked ? 'bg-brand-soft/40' : 'bg-white/60 hover:bg-brand/[0.06]',
+                            checked ? 'bg-brand-soft' : 'bg-white/80 hover:bg-brand/[0.06]',
                           )}
                         >
                           <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-2.5">
@@ -293,7 +293,7 @@ export function ModelPicker({
                               placeholder={pickerCopy.capPlaceholder}
                               value={selection[model.model] ?? ''}
                               onChange={(event) => setCap(model.model, event.target.value)}
-                              className="h-8 w-20 rounded-sm border border-white/70 bg-white/55 backdrop-blur-md px-2 tabular-nums text-meta text-ink disabled:bg-white/35 disabled:text-ink-3"
+                              className="h-8 w-20 rounded-sm border border-line-strong bg-white/85 backdrop-blur-md px-2 tabular-nums text-meta text-ink disabled:bg-bg-subtle disabled:text-ink-3"
                             />
                             {lowestMilli > 0 && prices ? (
                               <span className="tabular-nums">

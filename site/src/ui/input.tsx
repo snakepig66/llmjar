@@ -9,10 +9,10 @@ export interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
 
 /* 48px field on a frosted bed; focus is a blue border + 3px blue halo. */
 const inputBase = cn(
-  'h-12 w-full rounded-md border border-white/70 bg-white/55 px-4 text-body text-ink shadow-[inset_0_1px_2px_rgba(77,107,254,0.06)] backdrop-blur-md transition-[color,background-color,border-color,box-shadow]',
+  'h-12 w-full rounded-md border border-line-strong bg-white/85 px-4 text-body text-ink shadow-[inset_0_1px_2px_rgba(77,107,254,0.06)] backdrop-blur-md transition-[color,background-color,border-color,box-shadow]',
   'placeholder:text-ink-3',
-  'focus:border-brand/60 focus:bg-white/85 focus:outline-none focus:ring-[3px] focus:ring-brand/20',
-  'disabled:cursor-not-allowed disabled:bg-white/35 disabled:text-ink-3',
+  'focus:border-brand/60 focus:bg-white focus:outline-none focus:ring-[3px] focus:ring-brand/20',
+  'disabled:cursor-not-allowed disabled:bg-bg-subtle disabled:text-ink-3',
   'aria-[invalid=true]:border-danger aria-[invalid=true]:focus:ring-danger/10',
 )
 

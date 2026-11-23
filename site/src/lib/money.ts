@@ -39,15 +39,21 @@ function toMicros(value: MicroAmount): bigint | null {
 /**
  * Format integer micro-yuan as a display string: 420000 -> "¥0.42".
  *
- * Rules: six fraction digits are kept at most, trailing zeros are trimmed but
- * at least two decimals remain; the integer part is grouped with commas;
- * exact zero renders "¥0"; invalid input renders "—".
+ * Rules: `maxDecimals` fraction digits are kept at most (default 6), with
+ * rounding at that precision; trailing zeros are trimmed but at least two
+ * decimals remain; the integer part is grouped with commas; exact zero
+ * renders "¥0"; invalid input renders "—".
  *
  * Display only — never parse the result back or do arithmetic with it.
  */
-export function formatYuan(value: MicroAmount): string {
-  const micros = toMicros(value)
+export function formatYuan(value: MicroAmount, maxDecimals = 6): string {
+  let micros = toMicros(value)
   if (micros === null) return '—'
+  if (maxDecimals < 6) {
+    const unit = 10n ** BigInt(6 - Math.max(0, maxDecimals))
+    const half = unit / 2n
+    micros = micros >= 0n ? ((micros + half) / unit) * unit : -(((-micros + half) / unit) * unit)
+  }
   if (micros === 0n) return '¥0'
 
   const negative = micros < 0n

@@ -83,7 +83,7 @@ export const Switch = forwardRef<HTMLButtonElement, SwitchProps>(function Switch
         className={cn(
           'relative inline-flex h-6 w-10 shrink-0 items-center rounded-full border transition-colors',
           'focus-visible:border-brand focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-brand-soft',
-          value ? 'border-brand bg-brand' : 'border-line-strong bg-white/60',
+          value ? 'border-brand bg-brand' : 'border-line-strong bg-white/80',
           locked && 'cursor-not-allowed opacity-50',
           switchClassName,
         )}

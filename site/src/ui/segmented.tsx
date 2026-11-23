@@ -94,7 +94,7 @@ export const Segmented = forwardRef<HTMLDivElement, SegmentedProps>(function Seg
       aria-disabled={disabled || undefined}
       onKeyDown={handleKeyDown}
       className={cn(
-        'inline-flex items-center gap-0.5 rounded-full border border-white/70 bg-white/45 p-0.5 shadow-[inset_0_1px_2px_rgba(77,107,254,0.08)] backdrop-blur-md',
+        'inline-flex items-center gap-0.5 rounded-full border border-line bg-white/75 p-0.5 shadow-[inset_0_1px_2px_rgba(77,107,254,0.08)] backdrop-blur-md',
         disabled && 'opacity-50',
         className,
       )}

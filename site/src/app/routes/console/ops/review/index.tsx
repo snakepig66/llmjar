@@ -50,17 +50,18 @@ export const Route = createFileRoute('/console/ops/review/')({
 
 const page = copy.pages.adminListings
 
-type ListingFilter = 'all' | 'pending' | 'canary' | 'live' | 'paused' | 'banned'
+type ListingFilter = 'all' | 'pending' | 'canary' | 'live' | 'paused' | 'banned' | 'deleted'
 
 type PendingReviewAction = 'approve' | ListingRejectAction
 
 const filters: readonly FilterTabOption<ListingFilter>[] = [
-  { value: 'all', label: page.tabs.all },
   { value: 'pending', label: page.tabs.pending },
+  { value: 'all', label: page.tabs.all },
   { value: 'canary', label: page.tabs.canary },
   { value: 'live', label: page.tabs.live },
   { value: 'paused', label: page.tabs.paused },
   { value: 'banned', label: page.tabs.banned },
+  { value: 'deleted', label: page.tabs.deleted },
 ]
 
 const BANNABLE = new Set(['live', 'paused', 'canary', 'verifying'])
@@ -103,7 +104,7 @@ function PendingHostGroups({
         const key = group.host || PLATFORM_HOST_KEY
         const open = !collapsed.has(key)
         return (
-          <section key={key} className="glass">
+          <section key={key} className="card">
             <button
               type="button"
               aria-expanded={open}
@@ -199,7 +200,7 @@ function PendingHostGroups({
 }
 
 export function ListingsContent() {
-  const [filter, setFilter] = useState<ListingFilter>('all')
+  const [filter, setFilter] = useState<ListingFilter>('pending')
   // The grouped queue has its own endpoint and shape, so only one of the two
   // queries is enabled at a time.
   const listings = useQuery({
@@ -261,6 +262,10 @@ export function ListingsContent() {
   })
 
   const activeLabel = filters.find((option) => option.value === filter)?.label ?? page.tabs.all
+  // 全部 hides soft-deleted tombstones; they are still inspectable under 已删除.
+  const visibleListings = (listings.data ?? []).filter(
+    (listing) => filter !== 'all' || listing.status !== 'deleted',
+  )
 
   function closeDialog() {
     if (mutation.isPending) return
@@ -345,15 +350,15 @@ export function ListingsContent() {
           <PageSkeleton rows={6} />
         ) : listings.isError ? (
           <ErrorBlock error={listings.error} onRetry={() => void listings.refetch()} />
-        ) : listings.data.length === 0 ? (
+        ) : visibleListings.length === 0 ? (
           <Empty
             title={page.emptyTitle(activeLabel)}
             reason={page.emptyReason}
             next={page.emptyNext}
           />
         ) : (
-          <div className="glass p-6">
-          <Table minWidth={1000}>
+          <div className="card p-6">
+          <Table minWidth={1080}>
             <TableHead>
               <TableRow>
                 <TableHeaderCell>{page.columns.id}</TableHeaderCell>
@@ -362,24 +367,26 @@ export function ListingsContent() {
                 <TableHeaderCell>{page.columns.models}</TableHeaderCell>
                 <TableHeaderCell numeric>{page.columns.multiplier}</TableHeaderCell>
                 <TableHeaderCell numeric>{page.columns.concurrency}</TableHeaderCell>
+                <TableHeaderCell>{page.columns.createdAt}</TableHeaderCell>
                 <TableHeaderCell>{page.columns.status}</TableHeaderCell>
                 <TableHeaderCell>{page.columns.fingerprint}</TableHeaderCell>
                 <TableHeaderCell numeric>{page.columns.actions}</TableHeaderCell>
               </TableRow>
             </TableHead>
             <TableBody>
-              {listings.data.map((listing) => {
+              {visibleListings.map((listing) => {
                 const view = adminListingStatus(listing.status)
                 const canBan = BANNABLE.has(listing.status)
+                const deleted = listing.status === 'deleted'
                 return (
-                  <TableRow key={listing.id}>
+                  <TableRow key={listing.id} className={deleted ? 'opacity-60' : undefined}>
                     <TableCell className="tabular-nums text-meta text-ink-3">
                       #{listing.id}
                     </TableCell>
                     <TableCell>
                       <SellerId id={listing.seller_id} />
                     </TableCell>
-                    <TableCell className=" text-meta">{listing.vendor}</TableCell>
+                    <TableCell className="text-meta">{listing.vendor}</TableCell>
                     <TableCell>
                       <div className="flex max-w-[240px] flex-wrap gap-1">
                         {listing.models.slice(0, 2).map((model) => (
@@ -396,6 +403,9 @@ export function ListingsContent() {
                     <TableCell numeric className="text-ink-3">
                       {listing.concurrency_limit}
                     </TableCell>
+                    <TableCell className="whitespace-nowrap tabular-nums text-meta text-ink-3">
+                      {formatDateTime(listing.created_at)}
+                    </TableCell>
                     <TableCell>
                       <Tag tone={view.tone} dot>
                         {view.label}
@@ -403,7 +413,10 @@ export function ListingsContent() {
                     </TableCell>
                     <TableCell>
                       <span className="tabular-nums text-meta text-ink-3">
-                        {listing.key_fingerprint8 || copy.pages.adminCommon.none}
+                        {listing.key_fingerprint8.startsWith('deleted:') ||
+                        listing.key_fingerprint8 === ''
+                          ? copy.pages.adminCommon.none
+                          : listing.key_fingerprint8}
                       </span>
                     </TableCell>
                     <TableCell numeric className="text-right">

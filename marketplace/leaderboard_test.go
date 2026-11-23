@@ -2,6 +2,7 @@ package marketplace
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"regexp"
@@ -290,6 +291,115 @@ func TestLeaderboardCacheDoesNotMixQueries(t *testing.T) {
 	assert.Equal(t, int64(2), sellers.Items[0].Buyers)
 }
 
+// seedBoardListing writes a minimal mp_listings row so request rows can join
+// on listing_id for the vendor board.
+func seedBoardListing(t *testing.T, db *gorm.DB, id, sellerID int64, vendor string) {
+	t.Helper()
+	require.NoError(t, db.Create(&Listing{
+		ID:               id,
+		SellerID:         sellerID,
+		Vendor:           vendor,
+		Models:           []string{"model-a"},
+		MultiplierMilli:  800,
+		ConcurrencyLimit: 5,
+		Status:           ListingLive,
+		KeyFingerprint:   fmt.Sprintf("fp-%s-%d", vendor, id),
+		Version:          1,
+	}).Error)
+}
+
+func TestLeaderboardBuyersAnonymized(t *testing.T) {
+	f := newLeaderboardFixture(t)
+	now := time.Now()
+	// Buyer 100 burns 6000 tokens over two requests; buyer 101 burns 4000.
+	seedBoardRequest(t, f.db, "b-1", 100, 10011, "model-a", RequestSuccess, 10, 4000, 0, 100, now.Add(-time.Hour))
+	seedBoardRequest(t, f.db, "b-2", 100, 10011, "model-a", RequestFailed, 10, 2000, 0, 0, now.Add(-time.Hour))
+	seedBoardRequest(t, f.db, "b-3", 101, 10012, "model-b", RequestSuccess, 10, 4000, 0, 100, now.Add(-time.Hour))
+	// Below the token threshold: ignored.
+	seedBoardRequest(t, f.db, "b-4", 102, 10012, "model-b", RequestSuccess, 10, 10, 10, 0, now.Add(-time.Hour))
+
+	w := f.get(t, "/api/marketplace/leaderboard/buyers?range=24h")
+	data := decodeLeaderboardData[buyerLeaderboard](t, w)
+	require.Len(t, data.Items, 2)
+
+	assert.Equal(t, 1, data.Items[0].Rank)
+	assert.Regexp(t, regexp.MustCompile(`^用户 #[0-9a-f]{4}$`), data.Items[0].Alias)
+	assert.Equal(t, int64(6000), data.Items[0].Tokens)
+	assert.Equal(t, int64(2), data.Items[0].Requests, "repeated requests all count toward consumption")
+	assert.Equal(t, int64(500), data.Items[0].SuccessRateMilli, "one of two requests failed")
+	assert.Equal(t, int64(4000), data.Items[1].Tokens)
+	assert.NotEqual(t, data.Items[0].Alias, data.Items[1].Alias)
+
+	body := w.Body.String()
+	assert.False(t, strings.Contains(body, `"buyer_user_id"`), "buyer ids must not be returned")
+	assert.False(t, strings.Contains(body, `"seller_id"`), "seller ids must not be returned")
+
+	// Aliases differ from the seller board's domain for the same numeric id.
+	assert.NotEqual(t, sellerAlias(100), buyerAlias(100))
+	assert.NotContains(t, buyerAlias(100), "100")
+}
+
+func TestLeaderboardVendors(t *testing.T) {
+	f := newLeaderboardFixture(t)
+	now := time.Now()
+	seedBoardListing(t, f.db, 501, 10011, "deepseek")
+	seedBoardListing(t, f.db, 502, 10012, "custom-1-abcdef")
+	seedBoardListing(t, f.db, 503, 10013, "custom-2-fedcba")
+
+	seed := func(id string, buyer, listing int64, model string, tokens int64) {
+		t.Helper()
+		require.NoError(t, f.db.Create(&Request{
+			RequestID:       id,
+			BuyerUserID:     buyer,
+			SellerID:        10011,
+			ListingID:       listing,
+			Model:           model,
+			Tier:            TierFlat,
+			PriceVersion:    1,
+			MultiplierMilli: 1000,
+			InputTokens:     tokens,
+			Status:          RequestSuccess,
+			CreatedAt:       now.Add(-time.Hour),
+		}).Error)
+	}
+	seed("v-1", 1, 501, "model-a", 6000)
+	seed("v-2", 2, 501, "model-b", 2000)
+	seed("v-3", 3, 502, "model-a", 1500)
+	seed("v-4", 4, 503, "model-a", 2500)
+
+	w := f.get(t, "/api/marketplace/leaderboard/vendors?range=24h")
+	data := decodeLeaderboardData[vendorLeaderboard](t, w)
+	require.Len(t, data.Items, 2, "deepseek plus one folded custom bucket")
+	assert.Equal(t, int64(12000), data.TotalTokens)
+
+	assert.Equal(t, "deepseek", data.Items[0].Vendor)
+	assert.Equal(t, int64(8000), data.Items[0].Tokens)
+	assert.Equal(t, int64(2), data.Items[0].Models, "two distinct models served")
+	assert.Equal(t, int64(666), data.Items[0].ShareMilli)
+
+	assert.Equal(t, "custom", data.Items[1].Vendor)
+	assert.Equal(t, "", data.Items[1].DisplayName, "custom bucket defers naming to the frontend")
+	assert.Equal(t, int64(4000), data.Items[1].Tokens, "both custom listings fold together")
+	assert.Equal(t, int64(333), data.Items[1].ShareMilli)
+}
+
+func TestLeaderboardRange30d(t *testing.T) {
+	f := newLeaderboardFixture(t)
+	now := time.Now()
+	seedBoardRequest(t, f.db, "r-old", 100, 10011, "model-old", RequestSuccess,
+		10, 2000, 0, 100, now.Add(-10*24*time.Hour))
+	seedBoardRequest(t, f.db, "r-new", 100, 10011, "model-new", RequestSuccess,
+		10, 2000, 0, 100, now.Add(-time.Hour))
+
+	week := decodeLeaderboardData[modelLeaderboard](t, f.get(t, "/api/marketplace/leaderboard/models?range=7d"))
+	require.Len(t, week.Items, 1)
+	assert.Equal(t, "model-new", week.Items[0].Model)
+
+	month := decodeLeaderboardData[modelLeaderboard](t, f.get(t, "/api/marketplace/leaderboard/models?range=30d"))
+	require.Len(t, month.Items, 2)
+	assert.Equal(t, "30d", month.Range)
+}
+
 func TestLeaderboardEmptySamples(t *testing.T) {
 	f := newLeaderboardFixture(t)
 
@@ -300,6 +410,15 @@ func TestLeaderboardEmptySamples(t *testing.T) {
 	sellers := decodeLeaderboardData[sellerLeaderboard](t, f.get(t, "/api/marketplace/leaderboard/sellers"))
 	assert.NotNil(t, sellers.Items)
 	assert.Len(t, sellers.Items, 0)
+
+	buyers := decodeLeaderboardData[buyerLeaderboard](t, f.get(t, "/api/marketplace/leaderboard/buyers"))
+	assert.NotNil(t, buyers.Items)
+	assert.Len(t, buyers.Items, 0)
+
+	vendors := decodeLeaderboardData[vendorLeaderboard](t, f.get(t, "/api/marketplace/leaderboard/vendors"))
+	assert.NotNil(t, vendors.Items)
+	assert.Len(t, vendors.Items, 0)
+	assert.Zero(t, vendors.TotalTokens)
 
 	trend := decodeLeaderboardData[leaderboardTrend](t, f.get(t, "/api/marketplace/leaderboard/trend?days=3"))
 	require.Len(t, trend.Items, 3)

@@ -13,7 +13,7 @@ import { queryOptions } from '@tanstack/react-query'
 
 import { api } from '@/lib/api'
 
-export type LeaderboardRange = '24h' | '7d'
+export type LeaderboardRange = '24h' | '7d' | '30d'
 
 export interface ModelLeaderboardItem {
   rank: number
@@ -56,6 +56,50 @@ export interface SellerLeaderboard {
   items: SellerLeaderboardItem[]
 }
 
+export interface BuyerLeaderboardItem {
+  rank: number
+  /** Anonymized server-side, e.g. "用户 #a1b2". */
+  alias: string
+  requests: number
+  /** Thousandths of a percent; -1 = no sample. */
+  success_rate_milli: number
+  /** Input + output tokens over the window. */
+  tokens: number
+}
+
+export interface BuyerLeaderboard {
+  range: LeaderboardRange
+  window: 'sliding'
+  window_start: string
+  window_end: string
+  generated_at?: string
+  items: BuyerLeaderboardItem[]
+}
+
+export interface VendorLeaderboardItem {
+  rank: number
+  /** Channel slug; every seller-defined "custom-…" channel folds into 'custom'. */
+  vendor: string
+  /** Pool display name; empty for the folded 'custom' bucket. */
+  display_name: string
+  requests: number
+  tokens: number
+  /** Distinct models served over the window. */
+  models: number
+  /** Thousandths of a percent of the window's qualifying tokens. */
+  share_milli: number
+}
+
+export interface VendorLeaderboard {
+  range: LeaderboardRange
+  window: 'sliding'
+  window_start: string
+  window_end: string
+  generated_at?: string
+  total_tokens: number
+  items: VendorLeaderboardItem[]
+}
+
 export interface TrendDay {
   /** Asia/Shanghai calendar day, YYYY-MM-DD. */
   date: string
@@ -90,6 +134,28 @@ export const leaderboardSellersQuery = (range: LeaderboardRange, limit = 20) =>
     queryKey: ['marketplace', 'leaderboard', 'sellers', range, limit],
     queryFn: () =>
       api.get<SellerLeaderboard>('/marketplace/leaderboard/sellers', {
+        query: { range, limit },
+      }),
+    staleTime: CACHE_TTL,
+    refetchInterval: CACHE_TTL,
+  })
+
+export const leaderboardBuyersQuery = (range: LeaderboardRange, limit = 20) =>
+  queryOptions({
+    queryKey: ['marketplace', 'leaderboard', 'buyers', range, limit],
+    queryFn: () =>
+      api.get<BuyerLeaderboard>('/marketplace/leaderboard/buyers', {
+        query: { range, limit },
+      }),
+    staleTime: CACHE_TTL,
+    refetchInterval: CACHE_TTL,
+  })
+
+export const leaderboardVendorsQuery = (range: LeaderboardRange, limit = 20) =>
+  queryOptions({
+    queryKey: ['marketplace', 'leaderboard', 'vendors', range, limit],
+    queryFn: () =>
+      api.get<VendorLeaderboard>('/marketplace/leaderboard/vendors', {
         query: { range, limit },
       }),
     staleTime: CACHE_TTL,

@@ -44,6 +44,8 @@ import (
 func RegisterLeaderboardRoutes(g *gin.RouterGroup) {
 	g.GET("/leaderboard/models", getModelLeaderboard)
 	g.GET("/leaderboard/sellers", getSellerLeaderboard)
+	g.GET("/leaderboard/buyers", getBuyerLeaderboard)
+	g.GET("/leaderboard/vendors", getVendorLeaderboard)
 	g.GET("/leaderboard/trend", getLeaderboardTrend)
 }
 
@@ -52,6 +54,7 @@ func RegisterLeaderboardRoutes(g *gin.RouterGroup) {
 const (
 	leaderboardRange24h     = "24h"
 	leaderboardRange7d      = "7d"
+	leaderboardRange30d     = "30d"
 	leaderboardLimitDefault = 20
 	leaderboardLimitMax     = 100
 	leaderboardDaysDefault  = 30
@@ -60,13 +63,17 @@ const (
 	leaderboardCacheTTL = time.Minute
 )
 
-// parseLeaderboardRange normalizes ?range=. Anything other than "7d" is the
-// 24h default, so a bad query never turns into an error page.
+// parseLeaderboardRange normalizes ?range=. Anything other than "7d"/"30d" is
+// the 24h default, so a bad query never turns into an error page.
 func parseLeaderboardRange(raw string) (string, time.Duration) {
-	if strings.EqualFold(strings.TrimSpace(raw), leaderboardRange7d) {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case leaderboardRange7d:
 		return leaderboardRange7d, 7 * 24 * time.Hour
+	case leaderboardRange30d:
+		return leaderboardRange30d, 30 * 24 * time.Hour
+	default:
+		return leaderboardRange24h, 24 * time.Hour
 	}
-	return leaderboardRange24h, 24 * time.Hour
 }
 
 // parseLeaderboardLimit reads ?limit=: default 20, capped at 100.
@@ -523,6 +530,251 @@ func getSellerLeaderboard(c *gin.Context) {
 	})
 	if err != nil {
 		common.SysError(common.LogText("marketplace leaderboard sellers: %s", err.Error()))
+		common.ApiErrorStatus(c, http.StatusInternalServerError, errors.New("failed to query leaderboard"))
+		return
+	}
+	common.ApiSuccess(c, value)
+}
+
+// ---------------------------------------------------------------------------
+// buyer board
+// ---------------------------------------------------------------------------
+
+// buyerLeaderboardItem is one anonymized buyer board row: the consumption
+// side of the marketplace ("消耗达人"). BuyerID never leaves this file.
+type buyerLeaderboardItem struct {
+	Rank             int    `json:"rank"`
+	Alias            string `json:"alias"`
+	Requests         int64  `json:"requests"`
+	SuccessRateMilli int64  `json:"success_rate_milli"`
+	Tokens           int64  `json:"tokens"` // input + output
+}
+
+// buyerLeaderboard is GET /leaderboard/buyers's payload.
+type buyerLeaderboard struct {
+	Range       string                 `json:"range"`
+	Window      string                 `json:"window"`
+	WindowStart time.Time              `json:"window_start"`
+	WindowEnd   time.Time              `json:"window_end"`
+	GeneratedAt time.Time              `json:"generated_at"`
+	Items       []buyerLeaderboardItem `json:"items"`
+}
+
+// buyerAliasDomain is the domain-separation label for the buyer alias subkey.
+// It differs from the seller domain so the same numeric id never produces
+// the same public alias on both boards.
+const buyerAliasDomain = "marketplace/leaderboard/buyer-alias/v1"
+
+// buyerAlias renders "用户 #a1b2" — the buyer twin of sellerAlias.
+func buyerAlias(buyerID int64) string {
+	mac := hmac.New(sha256.New, anonSecret)
+	mac.Write([]byte(buyerAliasDomain))
+	key := mac.Sum(nil)
+	alias := hmac.New(sha256.New, key)
+	fmt.Fprintf(alias, "%d", buyerID)
+	return "用户 #" + hex.EncodeToString(alias.Sum(nil))[:4]
+}
+
+// buyerBoardRow is one buyer's aggregate over the window. Unlike the seller
+// board there is no anti-gaming cap: consumption is the metric itself, so a
+// heavy buyer legitimately ranks higher.
+type buyerBoardRow struct {
+	BuyerUserID  int64
+	ReqCount     int64
+	SuccessCount int64
+	Tokens       int64
+}
+
+func computeBuyerLeaderboard(db *gorm.DB, now time.Time, windowName string, window time.Duration, limit int) (buyerLeaderboard, error) {
+	since := now.Add(-window)
+	var rows []buyerBoardRow
+	err := db.Model(&Request{}).
+		Select(`buyer_user_id,
+			COUNT(*) AS req_count,
+			SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) AS success_count,
+			SUM(input_tokens + output_tokens) AS tokens`, RequestSuccess).
+		Where("created_at >= ? AND created_at <= ? AND (input_tokens + output_tokens) > ?",
+			since, now, leaderboardMinTokens).
+		Group("buyer_user_id").
+		Scan(&rows).Error
+	if err != nil {
+		return buyerLeaderboard{}, err
+	}
+	slices.SortFunc(rows, func(a, b buyerBoardRow) int {
+		if a.Tokens != b.Tokens {
+			return compareInt64Desc(a.Tokens, b.Tokens)
+		}
+		if a.ReqCount != b.ReqCount {
+			return compareInt64Desc(a.ReqCount, b.ReqCount)
+		}
+		return compareInt64Desc(b.BuyerUserID, a.BuyerUserID)
+	})
+	if len(rows) > limit {
+		rows = rows[:limit]
+	}
+	items := make([]buyerLeaderboardItem, 0, len(rows))
+	for i, row := range rows {
+		items = append(items, buyerLeaderboardItem{
+			Rank:             i + 1,
+			Alias:            buyerAlias(row.BuyerUserID),
+			Requests:         row.ReqCount,
+			SuccessRateMilli: rateMilli(row.ReqCount, row.SuccessCount),
+			Tokens:           row.Tokens,
+		})
+	}
+	return buyerLeaderboard{
+		Range:       windowName,
+		Window:      "sliding",
+		WindowStart: since,
+		WindowEnd:   now,
+		GeneratedAt: now,
+		Items:       items,
+	}, nil
+}
+
+// getBuyerLeaderboard serves GET /leaderboard/buyers (no login).
+func getBuyerLeaderboard(c *gin.Context) {
+	if len(anonSecret) == 0 {
+		common.ApiErrorStatus(c, http.StatusInternalServerError, errors.New("marketplace is not initialized"))
+		return
+	}
+	db := consoleDB(c)
+	if db == nil {
+		return
+	}
+	rangeName, window := parseLeaderboardRange(c.Query("range"))
+	limit := parseLeaderboardLimit(c.Query("limit"))
+	now := time.Now()
+	key := fmt.Sprintf("buyers|%s|%d", rangeName, limit)
+	value, err := cachedLeaderboard(key, now, func() (any, error) {
+		return computeBuyerLeaderboard(db, now, rangeName, window, limit)
+	})
+	if err != nil {
+		common.SysError(common.LogText("marketplace leaderboard buyers: %s", err.Error()))
+		common.ApiErrorStatus(c, http.StatusInternalServerError, errors.New("failed to query leaderboard"))
+		return
+	}
+	common.ApiSuccess(c, value)
+}
+
+// ---------------------------------------------------------------------------
+// vendor board
+// ---------------------------------------------------------------------------
+
+// vendorLeaderboardItem is one channel's share of window traffic. Every
+// seller-defined custom channel (slug "custom-…") folds into the single
+// "custom" bucket, matching how the square labels them 第三方; display_name
+// comes from the channel pool when the slug is a public channel.
+type vendorLeaderboardItem struct {
+	Rank        int    `json:"rank"`
+	Vendor      string `json:"vendor"`
+	DisplayName string `json:"display_name"`
+	Requests    int64  `json:"requests"`
+	Tokens      int64  `json:"tokens"`
+	Models      int64  `json:"models"`
+	// ShareMilli is the vendor's ‰ share of all qualifying window tokens.
+	ShareMilli int64 `json:"share_milli"`
+}
+
+// vendorLeaderboard is GET /leaderboard/vendors's payload.
+type vendorLeaderboard struct {
+	Range       string                  `json:"range"`
+	Window      string                  `json:"window"`
+	WindowStart time.Time               `json:"window_start"`
+	WindowEnd   time.Time               `json:"window_end"`
+	GeneratedAt time.Time               `json:"generated_at"`
+	TotalTokens int64                   `json:"total_tokens"`
+	Items       []vendorLeaderboardItem `json:"items"`
+}
+
+// vendorBoardFold is the SQL expression that groups every custom channel
+// into one bucket; listing vendors are the channel slug otherwise.
+const vendorBoardFold = `CASE WHEN l.vendor LIKE 'custom-%' OR l.vendor = '' THEN 'custom' ELSE l.vendor END`
+
+type vendorBoardRow struct {
+	Vendor   string
+	ReqCount int64
+	Tokens   int64
+	Models   int64
+}
+
+func computeVendorLeaderboard(db *gorm.DB, now time.Time, windowName string, window time.Duration, limit int) (vendorLeaderboard, error) {
+	since := now.Add(-window)
+	var rows []vendorBoardRow
+	err := db.Table("mp_requests AS r").
+		Select(vendorBoardFold+` AS vendor,
+			COUNT(*) AS req_count,
+			SUM(r.input_tokens + r.output_tokens) AS tokens,
+			COUNT(DISTINCT r.model) AS models`).
+		Joins("JOIN mp_listings AS l ON l.id = r.listing_id").
+		Where("r.created_at >= ? AND r.created_at <= ? AND (r.input_tokens + r.output_tokens) > ?",
+			since, now, leaderboardMinTokens).
+		Group(vendorBoardFold).
+		Scan(&rows).Error
+	if err != nil {
+		return vendorLeaderboard{}, err
+	}
+	var totalTokens int64
+	for i := range rows {
+		totalTokens += rows[i].Tokens
+	}
+	slices.SortFunc(rows, func(a, b vendorBoardRow) int {
+		if a.Tokens != b.Tokens {
+			return compareInt64Desc(a.Tokens, b.Tokens)
+		}
+		return strings.Compare(a.Vendor, b.Vendor)
+	})
+	if len(rows) > limit {
+		rows = rows[:limit]
+	}
+	items := make([]vendorLeaderboardItem, 0, len(rows))
+	for i, row := range rows {
+		displayName := row.Vendor
+		if row.Vendor == "custom" {
+			displayName = ""
+		} else if vendor, ok := ChannelPoolAsVendor(db, row.Vendor); ok && vendor.DisplayName != "" {
+			displayName = vendor.DisplayName
+		}
+		var share int64
+		if totalTokens > 0 {
+			share = row.Tokens * 1000 / totalTokens
+		}
+		items = append(items, vendorLeaderboardItem{
+			Rank:        i + 1,
+			Vendor:      row.Vendor,
+			DisplayName: displayName,
+			Requests:    row.ReqCount,
+			Tokens:      row.Tokens,
+			Models:      row.Models,
+			ShareMilli:  share,
+		})
+	}
+	return vendorLeaderboard{
+		Range:       windowName,
+		Window:      "sliding",
+		WindowStart: since,
+		WindowEnd:   now,
+		GeneratedAt: now,
+		TotalTokens: totalTokens,
+		Items:       items,
+	}, nil
+}
+
+// getVendorLeaderboard serves GET /leaderboard/vendors (no login).
+func getVendorLeaderboard(c *gin.Context) {
+	db := consoleDB(c)
+	if db == nil {
+		return
+	}
+	rangeName, window := parseLeaderboardRange(c.Query("range"))
+	limit := parseLeaderboardLimit(c.Query("limit"))
+	now := time.Now()
+	key := fmt.Sprintf("vendors|%s|%d", rangeName, limit)
+	value, err := cachedLeaderboard(key, now, func() (any, error) {
+		return computeVendorLeaderboard(db, now, rangeName, window, limit)
+	})
+	if err != nil {
+		common.SysError(common.LogText("marketplace leaderboard vendors: %s", err.Error()))
 		common.ApiErrorStatus(c, http.StatusInternalServerError, errors.New("failed to query leaderboard"))
 		return
 	}

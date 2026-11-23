@@ -502,7 +502,7 @@ export function CreateKeyDialog({
               >
                 <select
                   id="create-key-copy-from"
-                  className="h-11 w-full rounded-md border border-white/70 bg-white/55 backdrop-blur-md px-3 text-body text-ink"
+                  className="h-11 w-full rounded-md border border-line-strong bg-white/85 backdrop-blur-md px-3 text-body text-ink"
                   value={copyFrom}
                   onChange={(event) => applyCopySettings(event.target.value)}
                 >
@@ -616,7 +616,7 @@ export function CreateKeyDialog({
                     id="create-key-allow-ips"
                     rows={3}
                     spellCheck={false}
-                    className="w-full resize-y rounded-md border border-white/70 bg-white/55 backdrop-blur-md px-3 py-2 font-mono text-meta text-ink transition-colors placeholder:text-ink-3 focus:border-brand/60 focus:bg-white/85 focus:outline-none focus:ring-[3px] focus:ring-brand/20"
+                    className="w-full resize-y rounded-md border border-line-strong bg-white/85 backdrop-blur-md px-3 py-2 font-mono text-meta text-ink transition-colors placeholder:text-ink-3 focus:border-brand/60 focus:bg-white focus:outline-none focus:ring-[3px] focus:ring-brand/20"
                     placeholder={dialogCopy.allowIps.placeholder}
                     value={allowIps}
                     onChange={(event) => setAllowIps(event.target.value)}

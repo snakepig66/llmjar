@@ -483,6 +483,13 @@ func postSellerListing(c *gin.Context) {
 			}
 		}
 	}
+	// Official channels are platform self-operated: only an admin may list on
+	// them; regular sellers do not even see them in the wizard catalogue.
+	if vendor, exists := lookupVendorForDB(db, in.VendorID); exists &&
+		vendor.Tier == ChannelKindOfficial && c.GetInt("role") < common.RoleAdminUser {
+		common.ApiErrorStatus(c, http.StatusForbidden, errors.New("official channels are platform self-operated"))
+		return
+	}
 	listing, err := CreateListing(db, in)
 	if err != nil {
 		if handleSellerDuplicateKey(c, err) {
@@ -2056,6 +2063,12 @@ func postSellerListingProbe(c *gin.Context) {
 	vendor, ok := lookupVendorForDB(db, req.VendorID)
 	if !ok {
 		common.ApiErrorStatus(c, http.StatusBadRequest, errors.New("vendor is not whitelisted"))
+		return
+	}
+	// Probing an official channel spends upstream credit on a channel the
+	// seller could never list on; same admin-only gate as listing creation.
+	if vendor.Tier == ChannelKindOfficial && c.GetInt("role") < common.RoleAdminUser {
+		common.ApiErrorStatus(c, http.StatusForbidden, errors.New("official channels are platform self-operated"))
 		return
 	}
 	// A custom channel is private to its owner; probing someone else's slug

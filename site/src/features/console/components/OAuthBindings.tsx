@@ -155,14 +155,14 @@ export function OAuthBindings() {
           <Skeleton className="h-12 w-full" />
         </div>
       ) : (
-        <ul className="mt-4 divide-y divide-line/60">
+        <ul className="mt-4 divide-y divide-line">
           {providers.map((provider) => (
             <li
               key={provider}
               className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between"
             >
               <div className="flex min-w-0 items-center gap-3">
-                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-white/70 bg-white/70 text-ink">
+                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-line bg-white/70 text-ink">
                   {provider === 'github' ? <GithubMark /> : <GoogleMark />}
                 </span>
                 <div className="min-w-0">

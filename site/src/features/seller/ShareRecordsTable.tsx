@@ -51,35 +51,35 @@ export type ShareRecordCardsProps = ShareRecordsTableProps
 export function ShareRecordsTable({ records, onOpen }: ShareRecordsTableProps) {
   return (
     <div className="hidden md:block">
-      <Table minWidth={1260}>
+      <Table minWidth={1150} className="[&_td]:px-3 [&_th]:px-3">
         <TableHead>
           <TableRow>
-            <TableHeaderCell className="w-[240px] min-w-[220px]">
+            <TableHeaderCell className="w-[150px] min-w-[140px]">
+              <TableSortHeader title={copy.colTime} />
+            </TableHeaderCell>
+            <TableHeaderCell className="w-[210px] min-w-[190px]">
               <TableSortHeader title={copy.colModel} />
             </TableHeaderCell>
-            <TableHeaderCell className="w-[130px] min-w-[120px]">
+            <TableHeaderCell className="w-[110px] min-w-[100px]">
               <TableSortHeader title={copy.colChannel} />
             </TableHeaderCell>
-            <TableHeaderCell className="w-[90px] min-w-[80px]">
+            <TableHeaderCell className="w-[80px] min-w-[72px]">
               <TableSortHeader title={copy.colBuyer} />
             </TableHeaderCell>
-            <TableHeaderCell className="w-[190px] min-w-[180px]">
+            <TableHeaderCell className="w-[160px] min-w-[150px]">
               <TableSortHeader title={copy.colTokens} />
             </TableHeaderCell>
-            <TableHeaderCell className="w-[130px] min-w-[120px]">
+            <TableHeaderCell className="w-[110px] min-w-[100px]">
               <TableSortHeader title={copy.colLatency} />
             </TableHeaderCell>
             <TableHeaderCell className="w-[110px] min-w-[100px]">
               <TableSortHeader title={copy.colCost} />
             </TableHeaderCell>
-            <TableHeaderCell className="w-[160px] min-w-[150px]">
+            <TableHeaderCell className="w-[150px] min-w-[140px]">
               <TableSortHeader title={copy.colIncome} />
             </TableHeaderCell>
             <TableHeaderCell className="w-[72px] min-w-[72px] text-center">
               <TableSortHeader title={copy.colDetail} />
-            </TableHeaderCell>
-            <TableHeaderCell className="w-[160px] min-w-[150px]">
-              <TableSortHeader title={copy.colTime} />
             </TableHeaderCell>
           </TableRow>
         </TableHead>
@@ -100,13 +100,22 @@ export function ShareRecordsTable({ records, onOpen }: ShareRecordsTableProps) {
                 className="h-[68px]"
                 onClick={() => onOpen(record.request_id)}
               >
-                {/* 1. 模型 */}
-                <TableCell className="w-[240px] min-w-[220px] whitespace-nowrap">
+                {/* 1. 时间 + 状态 */}
+                <TableCell className="w-[150px] min-w-[140px] whitespace-nowrap">
+                  <TimeAndStatusCell
+                    createdAt={record.created_at}
+                    status={record.status}
+                    isSeller
+                  />
+                </TableCell>
+
+                {/* 2. 模型 */}
+                <TableCell className="w-[210px] min-w-[190px] whitespace-nowrap">
                   <ModelPillBadge model={record.model} converted={record.converted} />
                 </TableCell>
 
                 {/* 2. 渠道 */}
-                <TableCell className="w-[130px] min-w-[120px] whitespace-nowrap">
+                <TableCell className="w-[110px] min-w-[100px] whitespace-nowrap">
                   <ChannelPillBadge
                     id={record.listing_id}
                     subtext={channelSub || copy.dash}
@@ -116,14 +125,14 @@ export function ShareRecordsTable({ records, onOpen }: ShareRecordsTableProps) {
                 </TableCell>
 
                 {/* 3. 买家 */}
-                <TableCell className="w-[90px] min-w-[80px] whitespace-nowrap">
+                <TableCell className="w-[80px] min-w-[72px] whitespace-nowrap">
                   <span className="font-mono text-meta text-ink-2 whitespace-nowrap">
                     #{record.buyer_code}
                   </span>
                 </TableCell>
 
                 {/* 4. TOKENS */}
-                <TableCell className="w-[190px] min-w-[180px] whitespace-nowrap">
+                <TableCell className="w-[160px] min-w-[150px] whitespace-nowrap">
                   <TokensMetricCell
                     input={record.input_tokens}
                     output={record.output_tokens}
@@ -134,7 +143,7 @@ export function ShareRecordsTable({ records, onOpen }: ShareRecordsTableProps) {
                 </TableCell>
 
                 {/* 5. 耗时 */}
-                <TableCell className="w-[130px] min-w-[120px] whitespace-nowrap">
+                <TableCell className="w-[110px] min-w-[100px] whitespace-nowrap">
                   <TimingMetricCell
                     firstTokenMs={record.first_token_ms}
                     latencyMs={record.latency_ms}
@@ -150,7 +159,7 @@ export function ShareRecordsTable({ records, onOpen }: ShareRecordsTableProps) {
                 </TableCell>
 
                 {/* 7. 收益 (卖家所得) */}
-                <TableCell className="w-[160px] min-w-[150px] whitespace-nowrap">
+                <TableCell className="w-[150px] min-w-[140px] whitespace-nowrap">
                   <IncomePillBadge
                     sellerCreditMicro={record.seller_credit_micro}
                     buyerPaidMicro={record.buyer_paid_micro}
@@ -170,15 +179,6 @@ export function ShareRecordsTable({ records, onOpen }: ShareRecordsTableProps) {
                   >
                     查看
                   </button>
-                </TableCell>
-
-                {/* 9. 时间 + 状态 */}
-                <TableCell className="w-[160px] min-w-[150px] whitespace-nowrap">
-                  <TimeAndStatusCell
-                    createdAt={record.created_at}
-                    status={record.status}
-                    isSeller
-                  />
                 </TableCell>
               </TableRow>
             )

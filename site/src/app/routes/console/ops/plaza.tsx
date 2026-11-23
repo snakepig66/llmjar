@@ -301,7 +301,7 @@ function PlazaListingPage() {
                         <button
                           type="button"
                           aria-label={`编辑广场倍率 ${row.name}`}
-                          className="cursor-pointer rounded-md px-2 py-0.5 font-mono text-meta font-medium text-ink-2 hover:bg-brand-soft/50 hover:text-brand-ink"
+                          className="cursor-pointer rounded-md px-2 py-0.5 font-mono text-meta font-medium text-ink-2 hover:bg-brand-soft hover:text-brand-ink"
                           onClick={() => startEditMultiplier(row)}
                         >
                           {formatPlazaMultiplier(row.plaza_multiplier_milli)}x

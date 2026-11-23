@@ -3,7 +3,6 @@ import { Link, createFileRoute } from '@tanstack/react-router'
 import { useState } from 'react'
 
 import { copy } from '@/copy'
-import { cn } from '@/lib/cn'
 import { Button, Empty, PageHeader, Tag, buttonClasses, useToast } from '@/ui'
 
 import {
@@ -12,7 +11,6 @@ import {
   sellerListingsQuery,
   type MeResponse,
   type OnboardingInput,
-  type SellerIdentity,
 } from '@/features/seller/api'
 import { notify } from '@/features/seller/components'
 import { sellerErrorMessage } from '@/features/seller/errors'
@@ -23,103 +21,6 @@ export const Route = createFileRoute('/console/onboarding')({
 })
 
 const page = copy.pages.sellerOnboarding
-
-interface OnboardingStep {
-  key: 'agreement' | 'payout' | 'listing'
-  title: string
-  hint: string
-  done: boolean
-}
-
-/** 三步都从真实字段推导，不做本地乐观状态，避免刷新后回退。 */
-export function onboardingSteps(
-  seller: SellerIdentity,
-  listingCount: number,
-): OnboardingStep[] {
-  const signed = seller.progress.agreement_signed
-  const bound = seller.progress.payout_account_bound
-  return [
-    { key: 'agreement', title: page.stepTitles[0], hint: page.stepHints[0], done: signed },
-    { key: 'payout', title: page.stepTitles[1], hint: page.stepHints[1], done: bound },
-    {
-      key: 'listing',
-      title: page.stepTitles[2],
-      hint: page.stepHints[2],
-      done: listingCount > 0,
-    },
-  ]
-}
-
-function StepRail({ steps }: { steps: OnboardingStep[] }) {
-  const doneCount = steps.filter((step) => step.done).length
-  const currentIndex = steps.findIndex((step) => !step.done)
-
-  return (
-    <section aria-label={page.progress} className="mt-6 glass p-6">
-      <div className="flex items-baseline justify-between">
-        <h2 className="text-title font-semibold tracking-tight text-ink">{page.progress}</h2>
-        <span className="tabular-nums text-meta text-ink-3">
-          {doneCount}/{steps.length}
-        </span>
-      </div>
-      <ol className="mt-5 grid gap-3 sm:grid-cols-3">
-        {steps.map((step, index) => {
-          const active = index === currentIndex
-          return (
-            <li
-              key={step.key}
-              aria-current={active ? 'step' : undefined}
-              className={cn(
-                'relative rounded-md border p-4',
-                active ? 'border-brand bg-brand-soft/50' : 'border-white/70 bg-white/45 backdrop-blur-md',
-              )}
-            >
-              <div className="flex items-center gap-2">
-                <span
-                  className={cn(
-                    'grid h-6 w-6 shrink-0 place-items-center rounded-full border text-meta font-medium',
-                    step.done
-                      ? 'border-transparent bg-brand-soft text-brand-ink'
-                      : active
-                        ? 'border-transparent bg-brand text-white'
-                        : 'glass-inset text-ink-3',
-                  )}
-                  aria-hidden="true"
-                >
-                  {step.done ? (
-                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                      <path
-                        d="M2.5 6.2l2.2 2.2 4.8-5"
-                        stroke="currentColor"
-                        strokeWidth="1.6"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    </svg>
-                  ) : (
-                    index + 1
-                  )}
-                </span>
-                <span
-                  className={cn(
-                    'text-body font-medium',
-                    step.done || active ? 'text-ink' : 'text-ink-3',
-                  )}
-                >
-                  {step.title}
-                </span>
-              </div>
-              <p className="mt-2 text-meta leading-5 text-ink-3">{step.hint}</p>
-              <p className="mt-1 text-meta text-ink-3">
-                {step.done ? page.state.done : active ? page.state.current : page.state.todo}
-              </p>
-            </li>
-          )
-        })}
-      </ol>
-    </section>
-  )
-}
 
 export function SellerOnboardingPage() {
   const toast = useToast()
@@ -146,9 +47,8 @@ export function SellerOnboardingPage() {
   if (!seller) return null
 
   const blocked = seller.exists && (seller.status === 'banned' || seller.status === 'closed')
-  const steps = onboardingSteps(seller, listingCount)
   const errorText = mutation.isError ? sellerErrorMessage(mutation.error) : null
-  const allDone = steps.every((step) => step.done)
+  const allDone = signed && seller.progress.payout_account_bound && listingCount > 0
 
   function submit(input: OnboardingInput) {
     mutation.reset()
@@ -182,8 +82,6 @@ export function SellerOnboardingPage() {
         />
       ) : (
         <>
-          <StepRail steps={steps} />
-
           {!signed ? (
             <section className="mt-6 glass p-6">
               <header className="flex flex-wrap items-center justify-between gap-2 border-b border-line pb-4">

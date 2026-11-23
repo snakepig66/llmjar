@@ -123,13 +123,14 @@ func listVendors(c *gin.Context) {
 		common.ApiErrorStatus(c, http.StatusInternalServerError, errors.New("marketplace is not initialized"))
 		return
 	}
-	views := vendorCatalogue(db, 0)
+	views := vendorCatalogue(db, 0, true)
 	common.ApiSuccess(c, views)
 }
 
 // listSellerVendors serves the catalogue for the logged-in seller: the public
 // channels plus the seller's own custom upstreams, so a second listing can
-// reuse the same upstream.
+// reuse the same upstream. Official channels are platform self-operated and
+// are only offered to admins; other sellers cannot list on them.
 func listSellerVendors(c *gin.Context) {
 	db, _ := relayState()
 	if db == nil {
@@ -137,16 +138,22 @@ func listSellerVendors(c *gin.Context) {
 		return
 	}
 	viewerID := int64(common.GetContextKeyInt(c, constant.ContextKeyUserId))
-	common.ApiSuccess(c, vendorCatalogue(db, viewerID))
+	includeOfficial := c.GetInt("role") >= common.RoleAdminUser
+	common.ApiSuccess(c, vendorCatalogue(db, viewerID, includeOfficial))
 }
 
 // vendorCatalogue builds the channel list for one viewer. Custom channels
 // appear only when viewerID is their owner; viewerID 0 (public) sees none.
-func vendorCatalogue(db *gorm.DB, viewerID int64) []vendorView {
+// includeOfficial drops platform self-operated channels for viewers who may
+// not list on them.
+func vendorCatalogue(db *gorm.DB, viewerID int64, includeOfficial bool) []vendorView {
 	channels := ChannelPoolAll(db)
 	views := make([]vendorView, 0, len(channels))
 	for _, ch := range channels {
 		if ch.Status != PoolStatusActive {
+			continue
+		}
+		if !includeOfficial && ch.Kind == ChannelKindOfficial {
 			continue
 		}
 		if isCustomChannelSlug(ch.Slug) {
