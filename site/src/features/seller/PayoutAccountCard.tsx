@@ -186,7 +186,7 @@ export function PayoutAccountCard({
             'flex items-center gap-2 rounded-md px-3.5 py-1.5 text-meta font-medium transition-colors',
             channel === 'wechat'
               ? 'bg-brand text-white shadow-sm'
-              : 'text-ink-2 hover:bg-white/50 hover:text-ink',
+              : 'text-ink-2 hover:bg-white/70 hover:text-ink',
           )}
         >
           <span>{page.accountCard.channelWechat}</span>
@@ -201,7 +201,7 @@ export function PayoutAccountCard({
             'flex items-center gap-2 rounded-md px-3.5 py-1.5 text-meta font-medium transition-colors',
             channel === 'alipay'
               ? 'bg-brand text-white shadow-sm'
-              : 'text-ink-2 hover:bg-white/50 hover:text-ink',
+              : 'text-ink-2 hover:bg-white/70 hover:text-ink',
           )}
         >
           <span>{page.accountCard.channelAlipay}</span>

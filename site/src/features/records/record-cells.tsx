@@ -76,7 +76,7 @@ export function ModelPillBadge({
           className={cn(
             'inline-flex shrink-0 items-center px-1.5 py-0.5 rounded text-[11px] font-medium border whitespace-nowrap',
             source === 'plaza'
-              ? 'bg-brand/10 text-brand-ink border-brand/20'
+              ? 'bg-brand/10 text-brand-ink border-brand/40'
               : 'bg-surface text-ink-3 border-line',
           )}
         >
@@ -128,7 +128,7 @@ export function ChannelPillBadge({
   if (isInProgress) {
     return (
       <div className="inline-flex w-fit items-center whitespace-nowrap">
-        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-caption font-medium border shadow-2xs bg-blue-50 text-brand border-brand/20 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800/50 whitespace-nowrap">
+        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-caption font-medium border shadow-2xs bg-blue-50 text-brand border-brand/40 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800/50 whitespace-nowrap">
           进行中
         </span>
       </div>
@@ -143,7 +143,7 @@ export function ChannelPillBadge({
           className={cn(
             'inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-mono text-caption font-medium border shadow-2xs whitespace-nowrap',
             isBlue
-              ? 'bg-blue-50 text-brand border-brand/20 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800/50'
+              ? 'bg-blue-50 text-brand border-brand/40 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800/50'
               : 'bg-amber-50 text-amber-700 border-amber-200/80 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800/50'
           )}
         >
@@ -309,7 +309,7 @@ export function CostPillBadge({
   amountMicro: number | string
   className?: string
 }) {
-  const formatted = formatYuan(amountMicro)
+  const formatted = formatYuan(amountMicro, 4)
   const display = formatted === '¥0' ? '¥ 0' : formatted
   return (
     <div

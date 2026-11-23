@@ -75,7 +75,7 @@ function BaseUrl({
         type="button"
         onClick={() => void handleCopy()}
         className={cn(
-          'ml-auto shrink-0 rounded-full border border-white/70 bg-white/70 px-3 py-1 text-meta transition-colors',
+          'ml-auto shrink-0 rounded-full border border-line bg-white/70 px-3 py-1 text-meta transition-colors',
           state === 'failed'
             ? 'text-danger'
             : 'text-ink-2 hover:border-brand/40 hover:text-brand-ink',
@@ -432,7 +432,7 @@ export function DocsPage() {
                   'rounded-full px-3 py-1.5 text-body transition-colors',
                   active === id
                     ? 'bg-brand-soft font-medium text-brand-ink'
-                    : 'bg-white/55 text-ink-2 hover:bg-white/80 hover:text-ink',
+                    : 'bg-white/80 text-ink-2 hover:bg-white/80 hover:text-ink',
                 )}
               >
                 {docs.sections[id]}

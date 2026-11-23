@@ -56,32 +56,32 @@ export type BuyerRecordCardsProps = BuyerRecordsTableProps
 export function BuyerRecordsTable({ records, onOpen }: BuyerRecordsTableProps) {
   return (
     <div className="hidden md:block">
-      <Table minWidth={1180}>
+      <Table minWidth={1010} className="[&_td]:px-3 [&_th]:px-3">
         <TableHead>
           <TableRow>
-            <TableHeaderCell className="w-[260px] min-w-[240px]">
+            <TableHeaderCell className="w-[150px] min-w-[140px]">
+              <TableSortHeader title={copy.colTime} />
+            </TableHeaderCell>
+            <TableHeaderCell className="w-[220px] min-w-[200px]">
               <TableSortHeader title={copy.colModel} />
             </TableHeaderCell>
-            <TableHeaderCell className="w-[130px] min-w-[120px]">
+            <TableHeaderCell className="w-[110px] min-w-[100px]">
               <TableSortHeader title={copy.colSeller} />
             </TableHeaderCell>
-            <TableHeaderCell className="w-[130px] min-w-[110px]">
+            <TableHeaderCell className="w-[110px] min-w-[95px]">
               <TableSortHeader title={copy.colToken} />
             </TableHeaderCell>
-            <TableHeaderCell className="w-[190px] min-w-[180px]">
+            <TableHeaderCell className="w-[160px] min-w-[150px]">
               <TableSortHeader title={copy.colTokens} />
             </TableHeaderCell>
-            <TableHeaderCell className="w-[130px] min-w-[120px]">
+            <TableHeaderCell className="w-[110px] min-w-[100px]">
               <TableSortHeader title={copy.colLatency} />
             </TableHeaderCell>
-            <TableHeaderCell className="w-[110px] min-w-[100px]">
+            <TableHeaderCell className="w-[90px] min-w-[84px]">
               <TableSortHeader title={copy.colCost} />
             </TableHeaderCell>
-            <TableHeaderCell className="w-[72px] min-w-[72px] text-center">
+            <TableHeaderCell className="w-[64px] min-w-[64px] text-center">
               <TableSortHeader title={copy.colDetail} />
-            </TableHeaderCell>
-            <TableHeaderCell className="w-[160px] min-w-[150px]">
-              <TableSortHeader title={copy.colTime} />
             </TableHeaderCell>
           </TableRow>
         </TableHead>
@@ -112,13 +112,21 @@ export function BuyerRecordsTable({ records, onOpen }: BuyerRecordsTableProps) {
                 className="h-[68px]"
                 onClick={() => onOpen(record.request_id)}
               >
-                {/* 1. 模型 */}
-                <TableCell className="w-[260px] min-w-[240px] whitespace-nowrap">
+                {/* 1. 时间 + 状态 */}
+                <TableCell className="w-[150px] min-w-[140px] whitespace-nowrap">
+                  <TimeAndStatusCell
+                    createdAt={record.created_at}
+                    status={record.status}
+                  />
+                </TableCell>
+
+                {/* 2. 模型 */}
+                <TableCell className="w-[220px] min-w-[200px] whitespace-nowrap">
                   <ModelPillBadge model={record.model} converted={record.converted} source={record.source} />
                 </TableCell>
 
                 {/* 2. 卖家 / 渠道 */}
-                <TableCell className="w-[130px] min-w-[120px] whitespace-nowrap">
+                <TableCell className="w-[110px] min-w-[100px] whitespace-nowrap">
                   <ChannelPillBadge
                     id={record.seller_id}
                     subtext={subtext || copy.dash}
@@ -128,10 +136,10 @@ export function BuyerRecordsTable({ records, onOpen }: BuyerRecordsTableProps) {
                 </TableCell>
 
                 {/* 3. 令牌 */}
-                <TableCell className="w-[130px] min-w-[110px] whitespace-nowrap">{tokenDisplay}</TableCell>
+                <TableCell className="w-[110px] min-w-[95px] whitespace-nowrap">{tokenDisplay}</TableCell>
 
                 {/* 4. TOKENS */}
-                <TableCell className="w-[190px] min-w-[180px] whitespace-nowrap">
+                <TableCell className="w-[160px] min-w-[150px] whitespace-nowrap">
                   <TokensMetricCell
                     input={record.input_tokens}
                     output={record.output_tokens}
@@ -142,7 +150,7 @@ export function BuyerRecordsTable({ records, onOpen }: BuyerRecordsTableProps) {
                 </TableCell>
 
                 {/* 5. 耗时 */}
-                <TableCell className="w-[130px] min-w-[120px] whitespace-nowrap">
+                <TableCell className="w-[110px] min-w-[100px] whitespace-nowrap">
                   <TimingMetricCell
                     firstTokenMs={record.first_token_ms}
                     latencyMs={record.latency_ms}
@@ -153,12 +161,12 @@ export function BuyerRecordsTable({ records, onOpen }: BuyerRecordsTableProps) {
                 </TableCell>
 
                 {/* 6. 费用 */}
-                <TableCell className="w-[110px] min-w-[100px] whitespace-nowrap">
+                <TableCell className="w-[90px] min-w-[84px] whitespace-nowrap">
                   <CostPillBadge amountMicro={record.total_debit_micro} />
                 </TableCell>
 
                 {/* 7. 详情 */}
-                <TableCell className="w-[72px] min-w-[72px] text-center whitespace-nowrap">
+                <TableCell className="w-[64px] min-w-[64px] text-center whitespace-nowrap">
                   <button
                     type="button"
                     onClick={(e) => {
@@ -169,14 +177,6 @@ export function BuyerRecordsTable({ records, onOpen }: BuyerRecordsTableProps) {
                   >
                     查看
                   </button>
-                </TableCell>
-
-                {/* 8. 时间 + 状态 */}
-                <TableCell className="w-[160px] min-w-[150px] whitespace-nowrap">
-                  <TimeAndStatusCell
-                    createdAt={record.created_at}
-                    status={record.status}
-                  />
                 </TableCell>
               </TableRow>
             )

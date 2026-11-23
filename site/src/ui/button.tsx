@@ -10,10 +10,10 @@ const variants: Record<ButtonVariant, string> = {
   primary: 'btn-primary',
   /* Frosted glass pill. */
   secondary: 'btn-glass text-ink',
-  ghost: 'text-ink-2 hover:bg-white/60 hover:text-ink',
+  ghost: 'text-ink-2 hover:bg-white/80 hover:text-ink',
   /* Destructive only: red type on glass, never a red block. */
   danger:
-    'border border-danger/30 bg-white/60 text-danger backdrop-blur-md hover:bg-danger/5 active:bg-danger/10',
+    'border border-danger/30 bg-white/80 text-danger backdrop-blur-md hover:bg-danger/5 active:bg-danger/10',
   link: 'h-auto px-0 text-brand underline-offset-4 hover:text-brand-hover hover:underline',
 }
 

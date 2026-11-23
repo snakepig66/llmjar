@@ -23,16 +23,16 @@
    * `--color-surface` is the opaque fallback for engines without
    * backdrop-filter (see the @supports block at the bottom).
    */
-  --color-bg: rgb(255 255 255 / 0.62);
-  --color-bg-soft: rgb(232 239 255 / 0.55);
-  --color-bg-subtle: rgb(238 243 255 / 0.6);
-  --color-surface: rgb(255 255 255 / 0.72);
+  --color-bg: rgb(255 255 255 / 0.8);
+  --color-bg-soft: rgb(232 239 255 / 0.72);
+  --color-bg-subtle: rgb(238 243 255 / 0.78);
+  --color-surface: rgb(255 255 255 / 0.88);
   --color-ink: #0f1115;
   --color-ink-2: #454c5c;
-  /* A touch darker than before so tertiary text holds up on tinted glass. */
-  --color-ink-3: #767d8c;
-  --color-line: rgb(120 140 200 / 0.18);
-  --color-line-strong: rgb(100 125 200 / 0.28);
+  /* ~6:1 on white so tertiary text and placeholders stay legible on glass. */
+  --color-ink-3: #5a6274;
+  --color-line: rgb(96 118 190 / 0.34);
+  --color-line-strong: rgb(96 118 190 / 0.5);
   --color-brand: #4d6bfe;
   --color-brand-hover: #3b58f0;
   --color-brand-soft: #eef1ff;
@@ -203,8 +203,8 @@
 
   .glass {
     border-radius: var(--radius-md);
-    border: 1px solid rgb(255 255 255 / 0.65);
-    background-color: rgb(255 255 255 / 0.6);
+    border: 1px solid var(--color-line);
+    background-color: rgb(255 255 255 / 0.8);
     box-shadow:
       0 8px 32px rgb(77 107 254 / 0.1),
       inset 0 1px 0 rgb(255 255 255 / 0.7);
@@ -212,8 +212,8 @@
 
   .glass-strong {
     border-radius: var(--radius-md);
-    border: 1px solid rgb(255 255 255 / 0.7);
-    background-color: rgb(255 255 255 / 0.72);
+    border: 1px solid var(--color-line);
+    background-color: rgb(255 255 255 / 0.9);
     -webkit-backdrop-filter: blur(20px) saturate(180%);
     backdrop-filter: blur(20px) saturate(180%);
     box-shadow:
@@ -224,17 +224,29 @@
 
   /* Edge-to-edge bars (top bar, sidebar, save bar): no radius, no ring. */
   .glass-bar {
-    background-color: rgb(255 255 255 / 0.58);
+    background-color: rgb(255 255 255 / 0.78);
     box-shadow: 0 1px 24px rgb(77 107 254 / 0.06);
   }
 
   /* Quiet nested glass, e.g. a table well inside a card. */
   .glass-inset {
     border-radius: var(--radius-md);
-    border: 1px solid rgb(255 255 255 / 0.6);
-    background-color: rgb(255 255 255 / 0.4);
+    border: 1px solid var(--color-line);
+    background-color: rgb(255 255 255 / 0.6);
     -webkit-backdrop-filter: blur(12px) saturate(140%);
     backdrop-filter: blur(12px) saturate(140%);
+  }
+
+  /*
+   * Solid card for dense data areas (console tables, stats, forms). The
+   * glowing page background shows through glass and hurts readability on
+   * long data pages, so these stay opaque with one hairline.
+   */
+  .card {
+    border-radius: var(--radius-md);
+    border: 1px solid var(--color-line);
+    background-color: #ffffff;
+    box-shadow: 0 1px 2px rgb(15 17 21 / 0.04);
   }
 
   /* Primary action: brand gradient with a soft glow. */
@@ -496,7 +508,7 @@
   --secondary: #f1f4fa;
   --secondary-foreground: #2f4bd8;
   --muted: #edf1fa;
-  --muted-foreground: #767d8c;
+  --muted-foreground: #5a6274;
   --accent: #eef1ff;
   --accent-foreground: #0f1115;
   --destructive: #e5484d;
@@ -507,10 +519,10 @@
   --warning-foreground: #0f1115;
   --info: #4d6bfe;
   --info-foreground: #ffffff;
-  --neutral: #767d8c;
+  --neutral: #5a6274;
   --neutral-foreground: #ffffff;
-  --border: rgba(120, 140, 200, 0.18);
-  --input: rgba(100, 125, 200, 0.28);
+  --border: rgba(96, 118, 190, 0.34);
+  --input: rgba(96, 118, 190, 0.5);
   --ring: #4d6bfe;
   --chart-1: #4d6bfe;
   --chart-2: #6a8bff;
@@ -523,6 +535,6 @@
   --sidebar-primary-foreground: #ffffff;
   --sidebar-accent: #eef1ff;
   --sidebar-accent-foreground: #2f4bd8;
-  --sidebar-border: rgba(120, 140, 200, 0.18);
+  --sidebar-border: rgba(96, 118, 190, 0.34);
   --sidebar-ring: #4d6bfe;
 }

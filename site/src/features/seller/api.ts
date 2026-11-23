@@ -115,6 +115,14 @@ export interface SellerListing {
   resume_at?: string
   /** Per-model outcome of the latest verify probe. */
   verification?: SellerVerification | null
+  /** WorkBuddy OAuth account name; set only on WorkBuddy authorized listings. */
+  wb_account?: string
+  /** Daily check-in switch for WorkBuddy listings. */
+  auto_checkin?: boolean
+  /** Last check-in attempt time. */
+  checkin_at?: string
+  /** Last check-in outcome: claimed | done | inactive | ineligible | failed. */
+  checkin_result?: string
 }
 
 /** P4: one key (listing) inside a group. */
@@ -338,7 +346,12 @@ export interface SellerHeadersSubmitResult {
 
 export interface CreateListingInput {
   vendor_id: string
-  api_key: string
+  /** API-key listings; WorkBuddy OAuth listings use wb_session instead. */
+  api_key?: string
+  /** WorkBuddy authorized session id returned by /seller/listings/wb-auth/status. */
+  wb_session?: string
+  /** WorkBuddy daily check-in switch. */
+  auto_checkin?: boolean
   models: string[]
   multiplier_milli: number
   concurrency: number
@@ -933,6 +946,46 @@ export interface UpdateListingSettingsInput {
   rpm_limit?: number
   daily_cap_micro?: number
   hours?: string
+  /** WorkBuddy daily check-in switch (WorkBuddy listings only). */
+  auto_checkin?: boolean
+}
+
+/** POST /seller/wb-auth/start result: the Tencent sign-in page to open. */
+export interface WBAuthStart {
+  session_id: string
+  auth_url: string
+  expires_in: number
+}
+
+/** GET /seller/wb-auth/status result. */
+export interface WBAuthStatus {
+  status: 'pending' | 'authorized' | 'failed' | string
+  account_name?: string
+  /** Models the authorized account's product config offers its CLI. */
+  models?: { id: string; name: string }[]
+  /** Same catalogue shape as a probe result, built from the account's models. */
+  upstream_models?: UpstreamModelOption[]
+  pool_models?: PoolModelOption[]
+  verified_models?: string[]
+  coefficients?: Record<string, number>
+  error?: string
+}
+
+export function startWBAuth(): Promise<WBAuthStart> {
+  return api.post<WBAuthStart>(`${sellerBase}/wb-auth/start`, {})
+}
+
+export function wbAuthStatus(sessionId: string): Promise<WBAuthStatus> {
+  return api.get<WBAuthStatus>(`${sellerBase}/wb-auth/status?session_id=${encodeURIComponent(sessionId)}`)
+}
+
+export function checkinListing(id: number): Promise<{
+  outcome: string
+  credit?: number
+  streak?: number
+  message?: string
+}> {
+  return api.post(`${sellerBase}/listings/${id}/checkin`, {})
 }
 
 /** POST /seller/listings/batch-models body (one change across listings). */

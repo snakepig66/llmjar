@@ -198,60 +198,48 @@ async function fillAddressAndKeys(url: string, keys: string) {
   fireEvent.change(keyInput, { target: { value: keys } })
 }
 
-async function clickNext() {
-  const next = screen.getByRole('button', { name: '下一步' })
-  await waitFor(() => expect(next).toHaveProperty('disabled', false), { timeout: 4000 })
-  fireEvent.click(next)
-}
-
-async function advance(steps: number) {
-  for (let index = 0; index < steps; index += 1) {
-    await clickNext()
-  }
+async function waitForModels() {
+  await screen.findByRole('checkbox', { name: 'deepseek-flash' }, { timeout: 4000 })
 }
 
 async function reachVerify(url = 'https://api.deepseek.com', keys = 'sk-good-1234567890') {
   await fillAddressAndKeys(url, keys)
-  await advance(2)
-  await screen.findByRole('heading', { level: 2, name: '验真上架' })
+  await waitForModels()
 }
 
-describe('new listing wizard: three steps', () => {
-  it('counts required fields as they are filled', async () => {
+describe('new listing page: single-page flow', () => {
+  it('renders all three sections on one page without navigation buttons', async () => {
     renderPage()
-    expect(await screen.findByText('必填 0/2')).toBeTruthy()
+    expect(await screen.findByRole('heading', { level: 2, name: '地址与 Key' })).toBeTruthy()
+    expect(screen.getByRole('heading', { level: 2, name: '模型与价格' })).toBeTruthy()
+    expect(screen.getByRole('heading', { level: 2, name: '验真上架' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: '下一步' })).toBeNull()
+    expect(screen.queryByRole('button', { name: '上一步' })).toBeNull()
+  })
 
-    const urlInput = await screen.findByLabelText('上游地址')
-    fireEvent.change(urlInput, { target: { value: 'https://api.deepseek.com' } })
-    expect(await screen.findByText('必填 1/2')).toBeTruthy()
+  it('shows readiness chips and enables publish once url, key and models are ready', async () => {
+    renderPage()
+    const publish = await screen.findByRole('button', { name: '通过的先上架' })
+    expect(publish).toHaveProperty('disabled', true)
+    const chips = screen.getByTitle('地址、有效 Key、模型齐备后即可提交验真。')
+    expect(chips.textContent).toContain('上游地址')
+    expect(chips.textContent).toContain('Key 已连通')
+    expect(chips.textContent).toContain('已选模型')
 
+    fireEvent.change(await screen.findByLabelText('上游地址'), {
+      target: { value: 'https://api.deepseek.com' },
+    })
     fireEvent.change(screen.getByLabelText('上游 API Key'), {
       target: { value: 'sk-good-1234567890' },
     })
-    expect(await screen.findByText('必填 2/2', {}, { timeout: 4000 })).toBeTruthy()
+    await waitForModels()
+    await waitFor(() => expect(publish).toHaveProperty('disabled', false), {
+      timeout: 4000,
+    })
   })
 
-  it('walks forward through all three steps and back', async () => {
+  it('probes the address and shows the trust-pool badge', async () => {
     await fillAddressAndKeys('https://api.deepseek.com', 'sk-good-1234567890')
-    await advance(1)
-    expect(await screen.findByRole('heading', { level: 2, name: '模型与价格' })).toBeTruthy()
-    await advance(1)
-    expect(await screen.findByRole('heading', { level: 2, name: '验真上架' })).toBeTruthy()
-
-    fireEvent.click(screen.getByRole('button', { name: '上一步' }))
-    expect(await screen.findByRole('heading', { level: 2, name: '模型与价格' })).toBeTruthy()
-  })
-
-  it('fills a common address, probes it and shows the trust-pool badge', async () => {
-    renderPage()
-    const address = await screen.findByRole('button', { name: /DeepSeek/ })
-    fireEvent.click(address)
-    const urlInput = screen.getByLabelText('上游地址') as HTMLInputElement
-    expect(urlInput.value).toBe('https://api.deepseek.com')
-
-    fireEvent.change(screen.getByLabelText('上游 API Key'), {
-      target: { value: 'sk-good-1234567890' },
-    })
 
     expect(await screen.findByText(trustedPool.badge_text, {}, { timeout: 4000 })).toBeTruthy()
     const probeCall = fetchMock.mock.calls.find(
@@ -264,9 +252,9 @@ describe('new listing wizard: three steps', () => {
 
   it('shows the model table, applies a batch multiplier and previews the buyer price', async () => {
     await fillAddressAndKeys('https://api.deepseek.com', 'sk-good-1234567890')
-    await advance(1)
+    await waitForModels()
 
-    const flash = await screen.findByRole('checkbox', { name: 'deepseek-flash' })
+    const flash = screen.getByRole('checkbox', { name: 'deepseek-flash' })
     expect((flash as HTMLInputElement).checked).toBe(true)
     expect(screen.getByRole('button', { name: '从模型池选择' })).toBeTruthy()
 
@@ -279,9 +267,9 @@ describe('new listing wizard: three steps', () => {
     expect(screen.getByTestId('derived-deepseek-flash').textContent).toContain('0.30')
   })
 
-  it('collects limits and hours inside the collapsed advanced section on step 1', async () => {
+  it('collects limits and hours inside the collapsed advanced section', async () => {
     await fillAddressAndKeys('https://api.deepseek.com', 'sk-good-1234567890')
-    await advance(1)
+    await waitForModels()
 
     fireEvent.click(screen.getByText('高级选填（并发限制、限额、时段与请求头等）'))
 
@@ -298,14 +286,11 @@ describe('new listing wizard: three steps', () => {
     const weekday = screen.getByRole('checkbox', { name: '启用工作日时段' })
     fireEvent.click(weekday)
     expect((weekday as HTMLInputElement).checked).toBe(true)
-
-    await clickNext()
-    expect(await screen.findByRole('heading', { level: 2, name: '验真上架' })).toBeTruthy()
   })
 
   it('keeps advanced collapsed and locks headers for a listed address', async () => {
     await fillAddressAndKeys('https://api.deepseek.com', 'sk-good-1234567890')
-    await advance(1)
+    await waitForModels()
 
     fireEvent.click(screen.getByText('高级选填（并发限制、限额、时段与请求头等）'))
     expect(await screen.findByText('已收录地址不允许自定义请求头。')).toBeTruthy()
@@ -314,17 +299,16 @@ describe('new listing wizard: three steps', () => {
 
   it('unlocks request headers for an unlisted address', async () => {
     await fillAddressAndKeys('https://unlisted.example.com/v1', 'sk-good-1234567890')
-    await advance(1)
+    await waitForModels()
     fireEvent.click(screen.getByText('高级选填（并发限制、限额、时段与请求头等）'))
     expect(await screen.findByLabelText('请求头')).toBeTruthy()
   })
 })
 
-describe('new listing wizard: verification', () => {
+describe('new listing page: verification', () => {
   it('shows key × model × endpoint results and publishes only passing models', async () => {
     await reachVerify('https://api.deepseek.com', 'sk-good-1234567890\nsk-bad-1234567890')
 
-    expect(await screen.findByRole('heading', { level: 2, name: '验真上架' })).toBeTruthy()
     await waitFor(() => expect(screen.getAllByText('通过').length).toBeGreaterThan(0))
     expect(screen.getAllByText('未通过').length).toBeGreaterThan(0)
     expect(screen.getAllByText('key rejected by upstream').length).toBeGreaterThan(0)
@@ -377,8 +361,7 @@ describe('new listing wizard: verification', () => {
     expect(await screen.findByLabelText('第 1 个 Key 的权重')).toBeTruthy()
     expect(screen.getByLabelText('第 2 个 Key 的权重')).toBeTruthy()
 
-    await advance(2)
-    await screen.findByRole('heading', { level: 2, name: '验真上架' })
+    await waitForModels()
 
     fireEvent.click(await screen.findByRole('button', { name: '失败的保留为草稿' }))
     await waitFor(() => {

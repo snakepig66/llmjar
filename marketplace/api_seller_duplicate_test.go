@@ -9,6 +9,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/QuantumNous/new-api/common"
 )
 
 // failingTransport makes background verification fail immediately without
@@ -45,29 +47,31 @@ func TestSellerDuplicateKeyDistinction(t *testing.T) {
 	restore := setSellerVerifyClientForTest(&http.Client{Transport: failingTransport{}})
 	defer restore()
 
+	// The duplicate path needs a listing to exist; official channels are
+	// admin-only, so all three creates run as root.
 	key := uniqueTestKey("sk-dup-distinct")
-	w := f.do(t, http.MethodPost, "/api/marketplace/seller/listings", map[string]any{
+	w := f.doRole(t, http.MethodPost, "/api/marketplace/seller/listings", map[string]any{
 		"vendor_id": "deepseek", "api_key": key,
 		"models": []string{"deepseek-flash"}, "multiplier_milli": 500,
-	}, int(f.sellerID))
+	}, int(f.sellerID), common.RoleRootUser)
 	require.Equal(t, http.StatusOK, w.Code)
 	id := int64(decodeSellerBody(t, w)["data"].(map[string]any)["id"].(float64))
 
 	// Same seller, same key → own duplicate, with a linkable id.
-	w = f.do(t, http.MethodPost, "/api/marketplace/seller/listings", map[string]any{
+	w = f.doRole(t, http.MethodPost, "/api/marketplace/seller/listings", map[string]any{
 		"vendor_id": "deepseek", "api_key": key,
 		"models": []string{"deepseek-flash"}, "multiplier_milli": 500,
-	}, int(f.sellerID))
+	}, int(f.sellerID), common.RoleRootUser)
 	require.Equal(t, http.StatusConflict, w.Code)
 	body := decodeSellerBody(t, w)
 	assert.Equal(t, CodeDuplicateKeyOwn, body["code"])
 	assert.EqualValues(t, id, body["listing_id"])
 
 	// Another seller, same key → distinct code, no foreign identifiers.
-	w = f.do(t, http.MethodPost, "/api/marketplace/seller/listings", map[string]any{
+	w = f.doRole(t, http.MethodPost, "/api/marketplace/seller/listings", map[string]any{
 		"vendor_id": "deepseek", "api_key": key,
 		"models": []string{"deepseek-flash"}, "multiplier_milli": 500,
-	}, int(f.stranger))
+	}, int(f.stranger), common.RoleRootUser)
 	require.Equal(t, http.StatusConflict, w.Code)
 	raw := w.Body.String()
 	body = decodeSellerBody(t, w)

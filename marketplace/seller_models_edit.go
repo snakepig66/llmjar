@@ -55,7 +55,7 @@ func listingKeyAndVendor(db *gorm.DB, listingID int64) (Listing, Vendor, string,
 	if !ok {
 		return Listing{}, Vendor{}, "", ErrVendorNotWhitelisted
 	}
-	apiKey, err := DecryptListingKey(l.KeyCiphertext)
+	apiKey, err := decryptListingKeyForUse(db, &l)
 	if err != nil {
 		return Listing{}, Vendor{}, "", err
 	}

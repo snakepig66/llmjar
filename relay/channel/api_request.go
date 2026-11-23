@@ -23,6 +23,7 @@ import (
 	"github.com/QuantumNous/new-api/setting/operation_setting"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 )
 
@@ -178,6 +179,9 @@ func applyHeaderOverridePlaceholders(template string, c *gin.Context, apiKey str
 	if strings.Contains(template, "{api_key}") {
 		template = strings.ReplaceAll(template, "{api_key}", apiKey)
 	}
+	for strings.Contains(template, "{uuid}") {
+		template = strings.Replace(template, "{uuid}", uuid.NewString(), 1)
+	}
 	if strings.TrimSpace(template) == "" {
 		return "", false, nil
 	}
@@ -188,6 +192,7 @@ func applyHeaderOverridePlaceholders(template string, c *gin.Context, apiKey str
 // Supported placeholders:
 //   - {api_key}: resolved to the channel API key
 //   - {client_header:<name>}: resolved to the incoming request header value
+//   - {uuid}: resolved to a fresh random UUID per occurrence
 //
 // Header passthrough rules (keys only; values are ignored):
 //   - "*": passthrough all incoming headers by name (excluding unsafe headers)

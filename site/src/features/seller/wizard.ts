@@ -1,25 +1,16 @@
 /**
- * 新建渠道向导的步骤状态机（纯函数，方便单测）。
+ * 新建挂单页的校验与验真矩阵辅助（纯函数，方便单测）。
  *
- * 三步：1 地址与 Key → 2 模型与价格 → 3 验真上架。
- * 限制与高级合并在第 2 步底部的「高级选填」折叠区。
+ * 页面是单页三段：地址与 Key → 模型与价格 → 验真上架；
+ * 可提交与否由 canSubmit + 页面探测结果共同决定。
  */
 
 import { formatYuan } from '@/lib/money'
 import type { ProbeResult, TrustPoolInfo } from './api'
 import { parseYuanToMicro } from './money-input'
 
-export const WIZARD_STEP_COUNT = 3
-export const WIZARD_LAST_STEP = 2
-
-/** Stable step identifiers for navigation and tests. */
-export const WIZARD_STEP_IDS = ['url-keys', 'models', 'verify'] as const
-export type WizardStepId = (typeof WIZARD_STEP_IDS)[number]
-
 /** Sentinel vendor id for a seller-defined custom upstream (custom_channel.go). */
 export const CUSTOM_VENDOR_ID = 'custom'
-
-export type WizardStep = 0 | 1 | 2
 
 export interface WizardSnapshot {
   /** Absolute https upstream address typed by the seller. */
@@ -63,26 +54,6 @@ export function formatMultiplierText(milli: number, basePriceMicro?: number): st
     return `${mult}x · ${formatYuan(actualMicro)}/M`
   }
   return `${mult}x`
-}
-
-export function formatMultiplierAsDiscount(milli: number): string {
-  return formatMultiplierText(milli)
-}
-
-export const EMPTY_WIZARD_SNAPSHOT: WizardSnapshot = {
-  url: '',
-  vendorId: '',
-  apiKeys: [],
-  hasPassedKey: false,
-  trust: null,
-  probe: null,
-  availableModels: [],
-  selectedModels: [],
-  modelMultipliers: {},
-  concurrency: 5,
-  rpm: 0,
-  dailyCapYuan: '0',
-  hoursValid: true,
 }
 
 /** Split a multi-line key input into unique, trimmed keys. */
@@ -167,44 +138,11 @@ function limitsValid(snapshot: WizardSnapshot): boolean {
   )
 }
 
-export function canLeaveStep(step: WizardStep, snapshot: WizardSnapshot): boolean {
-  switch (step) {
-    case 0:
-      return (
-        validCustomURL(snapshot.url) &&
-        validApiKeys(snapshot.apiKeys) &&
-        snapshot.trust?.trust !== 'blocked' &&
-        Boolean(snapshot.hasPassedKey)
-      )
-    case 1:
-      return modelsValid(snapshot) && limitsValid(snapshot) && snapshot.headersValid !== false
-    case 2:
-      return canSubmit(snapshot)
-  }
-}
-
 export function canSubmit(snapshot: WizardSnapshot): boolean {
   return modelsValid(snapshot) && limitsValid(snapshot) && snapshot.headersValid !== false
 }
 
-export function nextWizardStep(current: WizardStep, snapshot: WizardSnapshot): WizardStep {
-  if (current >= WIZARD_LAST_STEP || !canLeaveStep(current, snapshot)) return current
-  return (current + 1) as WizardStep
-}
-
-export function previousWizardStep(current: WizardStep): WizardStep {
-  return (current <= 0 ? 0 : current - 1) as WizardStep
-}
-
-/** Steps are sequential: a later step can only be reached when all earlier gates pass. */
-export function canJumpTo(target: WizardStep, snapshot: WizardSnapshot): boolean {
-  for (let step = 0; step < target; step += 1) {
-    if (!canLeaveStep(step as WizardStep, snapshot)) return false
-  }
-  return target >= 0 && target <= WIZARD_LAST_STEP
-}
-
-/** Parse the advanced-step request-header textarea (`key: value` or `key=value`). */
+/** Parse the advanced-section request-header textarea (`key: value` or `key=value`). */
 export function validRequestHeaders(text: string): boolean {
   for (const raw of text.split(/\r?\n/)) {
     const line = raw.trim()

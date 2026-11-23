@@ -234,7 +234,7 @@ function PayoutAccountCard({ seller }: { seller: SellerIdentity }) {
             'flex items-center gap-2 rounded-md px-3.5 py-1.5 text-meta font-medium transition-colors',
             channel === 'wechat'
               ? 'bg-brand text-white shadow-sm'
-              : 'text-ink-2 hover:bg-white/50 hover:text-ink',
+              : 'text-ink-2 hover:bg-white/70 hover:text-ink',
           )}
         >
           <span>{page.accountCard.channelWechat}</span>
@@ -249,7 +249,7 @@ function PayoutAccountCard({ seller }: { seller: SellerIdentity }) {
             'flex items-center gap-2 rounded-md px-3.5 py-1.5 text-meta font-medium transition-colors',
             channel === 'alipay'
               ? 'bg-brand text-white shadow-sm'
-              : 'text-ink-2 hover:bg-white/50 hover:text-ink',
+              : 'text-ink-2 hover:bg-white/70 hover:text-ink',
           )}
         >
           <span>{page.accountCard.channelAlipay}</span>
@@ -454,7 +454,7 @@ function PayoutDialog({
     >
       <div className="space-y-4">
         {seller?.progress.payout_account_bound ? (
-          <div className="rounded-md border border-line bg-white/50 p-3 text-meta text-ink-2">
+          <div className="rounded-md border border-line bg-white/70 p-3 text-meta text-ink-2">
             <span className="font-medium text-ink">打款目标：</span>
             <span>
               {isWx ? '微信支付' : '支付宝'}

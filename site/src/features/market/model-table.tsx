@@ -22,6 +22,7 @@ import type {
   SquareTierPrices,
 } from './api'
 import { AddToKeyMenu } from './AddToKeyMenu'
+import { formatContext } from './format'
 import { modelLogo, withLogoVersion } from './model-logo'
 import { vendorLabel, vendorLogo, type VendorLookup } from './vendors'
 
@@ -255,12 +256,6 @@ function formatTime(value: string | null | undefined): string | null {
     hour: '2-digit',
     minute: '2-digit',
   })
-}
-
-function formatContext(tokens: number): string {
-  if (tokens >= 1_000_000) return `${(tokens / 1_000_000).toFixed(tokens % 1_000_000 === 0 ? 0 : 1)}M`
-  if (tokens >= 1000) return `${Math.round(tokens / 1000)}K`
-  return String(tokens)
 }
 
 /**

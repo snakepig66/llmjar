@@ -247,7 +247,7 @@ function ImportDialog({
             setText(event.target.value)
             setError(null)
           }}
-          className="w-full resize-y rounded-md border border-white/70 bg-white/55 backdrop-blur-md px-4 py-3 text-body leading-6 text-ink transition-colors placeholder:text-ink-3 focus:border-brand/60 focus:bg-white/85 focus:outline-none focus:ring-[3px] focus:ring-brand/20"
+          className="w-full resize-y rounded-md border border-line-strong bg-white/85 backdrop-blur-md px-4 py-3 text-body leading-6 text-ink transition-colors placeholder:text-ink-3 focus:border-brand/60 focus:bg-white focus:outline-none focus:ring-[3px] focus:ring-brand/20"
         />
       </Field>
     </Dialog>

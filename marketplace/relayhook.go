@@ -767,7 +767,7 @@ func startRelaySession(
 		release()
 		return nil, errors.New("marketplace: listing key unavailable")
 	}
-	realKey, err := DecryptListingKey(listing.KeyCiphertext)
+	realKey, err := decryptListingKeyForUse(db, &listing)
 	if err != nil {
 		// §2.3: the decryption error never names the key.
 		common.SysError(common.LogText("marketplace: decrypt listing %d key: %s", listing.ID, err.Error()))
@@ -1809,7 +1809,7 @@ func ReselectChannel(c *gin.Context, info *relaycommon.RelayInfo, setupFn func(*
 		}
 	}
 
-	realKey, err := DecryptListingKey(next.KeyCiphertext)
+	realKey, err := decryptListingKeyForUse(db, &next)
 	if err != nil {
 		common.SysError(common.LogText("marketplace: decrypt listing %d key: %s", next.ID, err.Error()))
 		s.releaseSlot()
@@ -2425,9 +2425,13 @@ type passthroughRewrite struct {
 	UpstreamModel   string
 	MaxOutputTokens int64
 	Stream          bool
-	RelayFormat     types.RelayFormat
-	ForceStoreFalse bool
-	UserPseudonym   string
+	// ForceUpstreamStream writes stream=true into the body even when the
+	// buyer asked for a non-streaming response (WorkBuddy refuses
+	// non-stream chats; the adaptor aggregates the SSE back to JSON).
+	ForceUpstreamStream bool
+	RelayFormat         types.RelayFormat
+	ForceStoreFalse     bool
+	UserPseudonym       string
 }
 
 // rewritePassthroughJSON applies the rewrite to a raw JSON request body. It
@@ -2440,6 +2444,27 @@ func rewritePassthroughJSON(body []byte, in passthroughRewrite) ([]byte, error) 
 	}
 	out := body
 	var err error
+	if in.ForceUpstreamStream {
+		if out, err = sjson.SetBytes(out, "stream", true); err != nil {
+			return nil, err
+		}
+		if in.RelayFormat != types.RelayFormatClaude &&
+			in.RelayFormat != types.RelayFormatOpenAIResponses {
+			if out, err = sjson.SetBytes(out, "stream_options.include_usage", true); err != nil {
+				return nil, err
+			}
+		}
+		// WorkBuddy speaks the classic max_tokens dialect.
+		if gjson.GetBytes(out, "max_completion_tokens").Exists() && !gjson.GetBytes(out, "max_tokens").Exists() {
+			out, err = sjson.SetBytes(out, "max_tokens", gjson.GetBytes(out, "max_completion_tokens").Value())
+			if err != nil {
+				return nil, err
+			}
+			if out, err = sjson.DeleteBytes(out, "max_completion_tokens"); err != nil {
+				return nil, err
+			}
+		}
+	}
 	if in.UpstreamModel != "" {
 		if out, err = sjson.SetBytes(out, "model", in.UpstreamModel); err != nil {
 			return nil, err
@@ -2545,13 +2570,19 @@ func (s *RelaySession) rewritePassthroughBody(c *gin.Context, info *relaycommon.
 			return types.NewOpenAIError(err, types.ErrorCodeReadRequestBodyFailed, http.StatusServiceUnavailable)
 		}
 	}
+	// WorkBuddy upstreams only accept streamed chats; the channel adaptor
+	// aggregates the SSE back to JSON for non-streaming buyers. Claude-format
+	// requests hit the native Messages endpoint and keep the buyer's flag.
+	forceStream := listing.Vendor == VendorWorkBuddy && info.RelayFormat != types.RelayFormatClaude
+	stream := info.IsStream || forceStream
 	rewritten, err := rewritePassthroughJSON(body, passthroughRewrite{
-		UpstreamModel:   upstreamName,
-		MaxOutputTokens: maxOut,
-		Stream:          info.IsStream,
-		RelayFormat:     info.RelayFormat,
-		ForceStoreFalse: officialOpenAIChannel(db, listing.Vendor),
-		UserPseudonym:   pseudonym,
+		UpstreamModel:       upstreamName,
+		MaxOutputTokens:     maxOut,
+		Stream:              stream,
+		ForceUpstreamStream: forceStream,
+		RelayFormat:         info.RelayFormat,
+		ForceStoreFalse:     officialOpenAIChannel(db, listing.Vendor),
+		UserPseudonym:       pseudonym,
 	})
 	if err != nil {
 		return types.NewOpenAIError(err, types.ErrorCodeInvalidRequest, http.StatusBadRequest)

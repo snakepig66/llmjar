@@ -227,17 +227,17 @@ export function WalletPage() {
           onRetry={() => void wallet.refetch()}
         />
       ) : (
-        <div className="mt-6 grid gap-6 glass p-6 sm:grid-cols-3 sm:divide-x sm:divide-line">
+        <div className="mt-6 grid gap-6 card p-6 sm:grid-cols-3 sm:divide-x sm:divide-line">
           <div className="min-w-0 sm:pr-6">
             <div className="text-meta text-ink-3">{page.balance}</div>
             <div className="mt-1 break-all text-h1 font-semibold leading-tight tracking-tight tabular-nums text-brand-ink">
-              {formatYuan(wallet.data.balance_micro)}
+              {formatYuan(wallet.data.balance_micro, 2)}
             </div>
             <div className="mt-1.5 text-meta leading-5 text-ink-3">{page.balanceHint}</div>
           </div>
           <Stat
             label={page.monthSpend}
-            value={formatYuan(wallet.data.month_spend_micro)}
+            value={formatYuan(wallet.data.month_spend_micro, 2)}
             className="sm:px-6"
           />
           <div className="min-w-0 pt-4 sm:pt-0 sm:pl-6">
@@ -251,11 +251,11 @@ export function WalletPage() {
               </Link>
             </div>
             <div className="mt-1 break-all text-h1 font-semibold leading-tight tracking-tight tabular-nums text-ink">
-              {sellerBalance.data ? formatYuan(sellerBalance.data.available_micro) : '¥0.00'}
+              {sellerBalance.data ? formatYuan(sellerBalance.data.available_micro, 2) : '¥0.00'}
             </div>
             <div className="mt-1.5 text-meta leading-5 text-ink-3">
               {sellerBalance.data
-                ? `待结算: ${formatYuan(sellerBalance.data.pending_micro)} · 累计已提: ${formatYuan(sellerBalance.data.paid_micro)}`
+                ? `待结算: ${formatYuan(sellerBalance.data.pending_micro, 2)} · 累计已提: ${formatYuan(sellerBalance.data.paid_micro, 2)}`
                 : '分享渠道赚取收益'}
             </div>
           </div>
@@ -582,7 +582,7 @@ function RechargePanel() {
                       className={
                         active
                           ? 'rounded-full border border-brand bg-brand-soft px-3.5 py-1.5 text-meta font-medium text-brand-ink'
-                          : 'rounded-full border border-white/70 bg-white/70 px-3.5 py-1.5 text-meta text-ink-2 transition-colors hover:border-line-strong hover:text-ink'
+                          : 'rounded-full border border-line bg-white/70 px-3.5 py-1.5 text-meta text-ink-2 transition-colors hover:border-line-strong hover:text-ink'
                       }
                     >
                       {option} 元
@@ -642,7 +642,7 @@ function RechargePanel() {
                     className={
                       method === item.type
                         ? 'rounded-full border border-brand bg-brand-soft px-3.5 py-1.5 text-meta font-medium text-brand-ink'
-                        : 'rounded-full border border-white/70 bg-white/70 px-3.5 py-1.5 text-meta text-ink-2 transition-colors hover:border-line-strong hover:text-ink'
+                        : 'rounded-full border border-line bg-white/70 px-3.5 py-1.5 text-meta text-ink-2 transition-colors hover:border-line-strong hover:text-ink'
                     }
                   >
                     {item.name}

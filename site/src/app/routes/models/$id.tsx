@@ -107,8 +107,8 @@ function DetailSkeleton() {
     <div className="space-y-6" aria-busy="true">
       <div className="h-8 w-64 animate-pulse rounded-sm bg-line" />
       <div className="h-4 w-full max-w-xl animate-pulse rounded-sm bg-line" />
-      <div className="h-64 animate-pulse rounded-lg bg-white/60" />
-      <div className="h-40 animate-pulse rounded-lg bg-white/60" />
+      <div className="h-64 animate-pulse rounded-lg bg-white/80" />
+      <div className="h-40 animate-pulse rounded-lg bg-white/80" />
     </div>
   )
 }

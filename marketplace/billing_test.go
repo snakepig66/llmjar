@@ -2,7 +2,6 @@ package marketplace
 
 import (
 	"errors"
-	"fmt"
 	"os"
 	"sync"
 	"testing"
@@ -498,7 +497,7 @@ func newTokenFixture(t *testing.T, buyerID int64, remain int) (int, string) {
 	token := model.Token{
 		UserId:      int(buyerID),
 		Name:        "mp-key",
-		Key:         fmt.Sprintf("mp-test-key-%d", time.Now().UnixNano()),
+		Key:         uniqueTestKey("mp-test-key"),
 		RemainQuota: remain,
 		Status:      common.TokenStatusEnabled,
 	}

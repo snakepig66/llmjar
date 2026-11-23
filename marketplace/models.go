@@ -154,6 +154,16 @@ type Listing struct {
 	PendingHeadersCiphertext []byte
 	PendingHeadersVersion    int `gorm:"not null;default:0"`
 	PendingHeadersAt         *time.Time
+	// OAuthCiphertext carries the encrypted OAuth bundle of a WorkBuddy
+	// channel (workbuddy.go): refresh token, expiry and the account identity.
+	// KeyCiphertext keeps the current access token, so the existing key paths
+	// work unchanged. Empty for ordinary channels.
+	OAuthCiphertext []byte
+	// AutoCheckin lets the daily job claim the channel's WorkBuddy daily
+	// credit. CheckinAt/CheckinResult record the last run for the seller view.
+	AutoCheckin   bool `gorm:"not null;default:false"`
+	CheckinAt     *time.Time
+	CheckinResult string `gorm:"type:text;not null;default:''"`
 }
 
 func (Listing) TableName() string { return "mp_listings" }

@@ -80,10 +80,16 @@ function toOptionalBool(value: unknown): boolean | undefined {
   return undefined
 }
 
-/** ms → "820 ms"; 0 = 无数据 → "—". */
+/** ms → "820 ms" / "1.9 s"; 0 = 无数据 → "—". */
 function formatAvg(ms: number): string {
-  return ms > 0 ? `${Math.round(ms)} ms` : '—'
+  if (ms <= 0) return '—'
+  return ms >= 1000 ? `${(ms / 1000).toFixed(1)} s` : `${Math.round(ms)} ms`
 }
+
+const compactTokens = new Intl.NumberFormat('zh-CN', {
+  notation: 'compact',
+  maximumFractionDigits: 1,
+})
 
 export const Route = createFileRoute('/console/records')({
   validateSearch: (search: Record<string, unknown>): RecordsSearch => {
@@ -260,10 +266,10 @@ function RecordsPage() {
         },
         {
           label: sellerPageCopy.summary.tokens,
-          value: `${formatCount(summaryData.input_tokens + (summaryData.cache_read_tokens ?? 0) + (summaryData.cache_write_tokens ?? 0))} / ${formatCount(summaryData.output_tokens)}`,
+          value: `${compactTokens.format(summaryData.input_tokens + (summaryData.cache_read_tokens ?? 0) + (summaryData.cache_write_tokens ?? 0))} / ${compactTokens.format(summaryData.output_tokens)}`,
           hint: sellerPageCopy.summary.tokensHint,
         },
-        { label: sellerPageCopy.summary.income, value: formatYuan(summaryData.seller_credit_micro) },
+        { label: sellerPageCopy.summary.income, value: formatYuan(summaryData.seller_credit_micro, 2) },
         {
           label: sellerPageCopy.summary.latency,
           value: `${formatAvg(summaryData.avg_first_token_ms)} / ${formatAvg(summaryData.avg_latency_ms)}`,
@@ -286,15 +292,13 @@ function RecordsPage() {
       },
       {
         label: 'Tokens',
-        value: `${formatCount(summaryData.input_tokens + (summaryData.cache_read_tokens ?? 0) + (summaryData.cache_write_tokens ?? 0))} / ${formatCount(summaryData.output_tokens)}`,
+        value: `${compactTokens.format(summaryData.input_tokens + (summaryData.cache_read_tokens ?? 0) + (summaryData.cache_write_tokens ?? 0))} / ${compactTokens.format(summaryData.output_tokens)}`,
         hint: '输入 / 输出',
       },
-      { label: '实付', value: formatYuan(summaryData.total_debit_micro) },
+      { label: '实付', value: formatYuan(summaryData.total_debit_micro, 2) },
       {
         label: '平均耗时',
-        value: `${summaryData.avg_first_token_ms > 0 ? `${Math.round(summaryData.avg_first_token_ms)} ms` : '—'} / ${
-          summaryData.avg_latency_ms > 0 ? `${Math.round(summaryData.avg_latency_ms)} ms` : '—'
-        }`,
+        value: `${formatAvg(summaryData.avg_first_token_ms)} / ${formatAvg(summaryData.avg_latency_ms)}`,
         hint: '首字 / 总耗时',
       },
     ]
@@ -351,7 +355,7 @@ function RecordsPage() {
             'inline-flex h-9 shrink-0 items-center whitespace-nowrap rounded-full px-4 text-body font-medium transition-colors',
             !isSeller
               ? 'bg-brand text-white shadow-xs'
-              : 'text-ink-2 hover:bg-white/60 hover:text-ink',
+              : 'text-ink-2 hover:bg-white/80 hover:text-ink',
           )}
         >
           我的调用（消费）
@@ -363,7 +367,7 @@ function RecordsPage() {
             'inline-flex h-9 shrink-0 items-center whitespace-nowrap rounded-full px-4 text-body font-medium transition-colors',
             isSeller
               ? 'bg-brand text-white shadow-xs'
-              : 'text-ink-2 hover:bg-white/60 hover:text-ink',
+              : 'text-ink-2 hover:bg-white/80 hover:text-ink',
           )}
         >
           渠道收益调用（分享）

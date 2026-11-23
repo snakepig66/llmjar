@@ -93,7 +93,7 @@ export function AnnouncementBanner() {
           type="button"
           onClick={dismiss}
           aria-label={copy.announcement.close}
-          className="shrink-0 rounded p-1 text-ink-3 transition-colors hover:bg-white/60 hover:text-ink"
+          className="shrink-0 rounded p-1 text-ink-3 transition-colors hover:bg-white/80 hover:text-ink"
         >
           ×
         </button>

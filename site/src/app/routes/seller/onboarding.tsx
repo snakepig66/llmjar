@@ -54,7 +54,7 @@ function StepRail({ seller }: { seller: SellerIdentity }) {
               aria-current={active ? 'step' : undefined}
               className={cn(
                 'relative rounded-md border p-4',
-                active ? 'border-brand bg-brand-soft/50' : 'border-white/70 bg-white/45 backdrop-blur-md',
+                active ? 'border-brand bg-brand-soft' : 'border-line bg-white/75 backdrop-blur-md',
               )}
             >
               <div className="flex items-center gap-2">

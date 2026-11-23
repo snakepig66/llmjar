@@ -474,7 +474,7 @@ func verifyPendingHeaders(db *gorm.DB, listingID int64, version int) {
 		rejectPendingHeaders(db, listingID, version, "header policy is not valid", 0, "")
 		return
 	}
-	apiKey, err := DecryptListingKey(listing.KeyCiphertext)
+	apiKey, err := decryptListingKeyForUse(db, &listing)
 	if err != nil {
 		rejectPendingHeaders(db, listingID, version, "listing key cannot be decrypted", 0, "")
 		return

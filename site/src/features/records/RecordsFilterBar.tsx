@@ -247,7 +247,7 @@ export function RecordsFilterBar({
             <Button
               variant="ghost"
               size="md"
-              className="h-10 px-3 text-meta text-ink-3 hover:text-ink hover:bg-white/40"
+              className="h-10 px-3 text-meta text-ink-3 hover:text-ink hover:bg-white/70"
               onClick={onToggleSummary}
               title={showSummary ? '收起数据汇总概览' : '展开数据汇总概览'}
             >

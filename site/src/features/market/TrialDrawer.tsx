@@ -64,7 +64,7 @@ export function TrialDrawer({ model, open, onOpenChange }: TrialDrawerProps) {
                 void send()
               }
             }}
-            className="min-h-[44px] flex-1 resize-none rounded-md border border-white/70 bg-white/55 px-3 py-2 text-body leading-6 text-ink backdrop-blur-md placeholder:text-ink-3 focus:border-brand/60 focus:bg-white/85 focus:outline-none focus:ring-[3px] focus:ring-brand/20"
+            className="min-h-[44px] flex-1 resize-none rounded-md border border-line-strong bg-white/85 px-3 py-2 text-body leading-6 text-ink backdrop-blur-md placeholder:text-ink-3 focus:border-brand/60 focus:bg-white focus:outline-none focus:ring-[3px] focus:ring-brand/20"
           />
           <Button loading={sending} disabled={!input.trim()} onClick={() => void send()}>
             {sending ? page.sending : page.send}

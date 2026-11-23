@@ -318,7 +318,7 @@ function SidebarNavLink({
     'group flex h-9 items-center gap-2.5 rounded-full px-3 text-body transition-[color,background-color]',
     active
       ? 'bg-brand/10 font-medium text-brand-ink'
-      : 'text-ink-2 hover:bg-white/60 hover:text-ink',
+      : 'text-ink-2 hover:bg-white/80 hover:text-ink',
   )
 
   const content = (

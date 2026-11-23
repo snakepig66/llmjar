@@ -49,6 +49,7 @@ describe('BuyerRecordsTable', () => {
       .getAllByRole('columnheader')
       .map((cell) => cell.textContent?.replace(/\s+/g, ' ').trim())
     expect(headers).toEqual([
+      '时间',
       '模型',
       '卖家',
       '令牌',
@@ -56,7 +57,6 @@ describe('BuyerRecordsTable', () => {
       '耗时',
       '费用',
       '详情',
-      '时间',
     ])
   })
 

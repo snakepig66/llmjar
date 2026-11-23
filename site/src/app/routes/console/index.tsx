@@ -3,6 +3,7 @@ import { Link, createFileRoute } from '@tanstack/react-router'
 import { Suspense, lazy, type ReactNode } from 'react'
 
 import { copy } from '@/copy'
+import { cn } from '@/lib/cn'
 import { formatYuan } from '@/lib/money'
 import { formatDateTime } from '@/lib/time'
 import {
@@ -113,17 +114,25 @@ function ConsoleOverviewPage() {
           ) : (
             <>
               <StatCard>
-                <Stat
-                  label={page.stats.balance}
-                  value={formatYuan(wallet.data.balance_micro)}
-                  hint={page.stats.balanceHint}
-                  tone="brand"
-                />
+                <div className="flex items-start justify-between gap-3">
+                  <Stat
+                    label={page.stats.balance}
+                    value={formatYuan(wallet.data.balance_micro, 2)}
+                    hint={page.stats.balanceHint}
+                    tone="brand"
+                  />
+                  <Link
+                    to="/console/wallet"
+                    className={cn(buttonClasses('secondary', 'sm'), 'shrink-0')}
+                  >
+                    {copy.pages.consoleWallet.recharge.title}
+                  </Link>
+                </div>
               </StatCard>
               <StatCard>
                 <Stat
                   label={page.stats.spendThisMonth}
-                  value={formatYuan(wallet.data.month_spend_micro)}
+                  value={formatYuan(wallet.data.month_spend_micro, 2)}
                   hint={page.stats.spendHint}
                 />
               </StatCard>
@@ -258,7 +267,7 @@ function ConsoleOverviewPage() {
                         </div>
                       )}
                     </TableCell>
-                    <TableCell numeric>{formatYuan(row.totalDebitMicro)}</TableCell>
+                    <TableCell numeric>{formatYuan(row.totalDebitMicro, 4)}</TableCell>
                   </TableRow>
                 )
               })}
@@ -271,5 +280,5 @@ function ConsoleOverviewPage() {
 }
 
 function StatCard({ children }: { children: ReactNode }) {
-  return <div className="min-w-0 glass p-5">{children}</div>
+  return <div className="min-w-0 card p-5">{children}</div>
 }

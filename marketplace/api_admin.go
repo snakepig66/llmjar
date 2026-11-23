@@ -544,9 +544,15 @@ type adminListing struct {
 }
 
 func toAdminListing(l *Listing) adminListing {
+	// Soft-deleted rows carry a "deleted:<id>" tombstone fingerprint; fall back
+	// to deleted_fingerprint so reviewers can still identify the original key.
+	fingerprint := l.KeyFingerprint
+	if strings.HasPrefix(fingerprint, "deleted:") {
+		fingerprint = l.DeletedFingerprint
+	}
 	fp8 := ""
-	if len(l.KeyFingerprint) >= 8 {
-		fp8 = l.KeyFingerprint[:8]
+	if len(fingerprint) >= 8 {
+		fp8 = fingerprint[:8]
 	}
 	return adminListing{
 		ID:               l.ID,
@@ -573,7 +579,7 @@ func adminListListings(c *gin.Context) {
 	}
 	q := db.Model(&Listing{}).Select("id", "seller_id", "channel_id", "vendor", "models",
 		"multiplier_milli", "concurrency_limit", "rpm_limit", "daily_cap_micro",
-		"status", "key_fingerprint", "created_at")
+		"status", "key_fingerprint", "deleted_fingerprint", "created_at")
 	if status := c.Query("status"); status != "" {
 		q = q.Where("status = ?", status)
 	}

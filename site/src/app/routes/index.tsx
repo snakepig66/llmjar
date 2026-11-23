@@ -282,7 +282,7 @@ export function HomePage() {
                 key={card.label}
                 className="glass glass-lift flex flex-col rounded-lg p-6 sm:p-8"
               >
-                <span className="w-fit rounded-full bg-white/60 px-3 py-1 text-caption font-medium text-ink-2">
+                <span className="w-fit rounded-full bg-white/80 px-3 py-1 text-caption font-medium text-ink-2">
                   {card.label}
                 </span>
                 <h3 className="mt-4 text-h3 font-semibold tracking-tight text-ink">

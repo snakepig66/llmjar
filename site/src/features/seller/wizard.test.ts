@@ -3,13 +3,9 @@ import { describe, expect, it } from 'vitest'
 import type { ProbeResult } from './api'
 import {
   buildVerificationMatrix,
-  canJumpTo,
-  canLeaveStep,
   canSubmit,
   maskApiKey,
-  nextWizardStep,
   parseApiKeys,
-  previousWizardStep,
   validCustomURL,
   validRequestHeaders,
   type WizardSnapshot,
@@ -61,60 +57,28 @@ describe('wizard key parsing', () => {
   })
 })
 
-describe('wizard step gates (3 steps)', () => {
-  it('requires an https address, keys, a passed probe and a non-blocked trust state before leaving step 0', () => {
-    expect(canLeaveStep(0, snapshot({ url: 'http://api.deepseek.com' }))).toBe(false)
-    expect(canLeaveStep(0, snapshot({ url: 'https://api.deepseek.com' }))).toBe(true)
-    expect(canLeaveStep(0, snapshot({ apiKeys: [] }))).toBe(false)
-    expect(canLeaveStep(0, snapshot({ hasPassedKey: false }))).toBe(false)
-    expect(
-      canLeaveStep(
-        0,
-        snapshot({
-          trust: { ...okProbe.trust_pool!, trust: 'blocked' },
-        }),
-      ),
-    ).toBe(false)
-    expect(
-      canLeaveStep(
-        0,
-        snapshot({
-          trust: { ...okProbe.trust_pool!, trust: 'unlisted' },
-        }),
-      ),
-    ).toBe(true)
-    expect(nextWizardStep(0, snapshot({ apiKeys: [] }))).toBe(0)
-    expect(nextWizardStep(0, snapshot())).toBe(1)
-  })
-
-  it('requires a selected model the keys can call, valid limits and headers on step 1', () => {
-    expect(canLeaveStep(1, snapshot({ selectedModels: [] }))).toBe(false)
-    expect(canLeaveStep(1, snapshot({ selectedModels: ['not-served'] }))).toBe(false)
-    expect(
-      canLeaveStep(1, snapshot({ modelMultipliers: { 'deepseek-flash': 0 } })),
-    ).toBe(false)
-    expect(
-      canLeaveStep(1, snapshot({ modelMultipliers: { 'deepseek-flash': 1100 } })),
-    ).toBe(false)
-    expect(canLeaveStep(1, snapshot({ concurrency: 0 }))).toBe(false)
-    expect(canLeaveStep(1, snapshot({ rpm: -1 }))).toBe(false)
-    expect(canLeaveStep(1, snapshot({ dailyCapYuan: 'abc' }))).toBe(false)
-    expect(canLeaveStep(1, snapshot({ headersValid: false }))).toBe(false)
-    expect(canLeaveStep(1, snapshot({ headersValid: true }))).toBe(true)
-    expect(canLeaveStep(1, snapshot())).toBe(true)
-  })
-
-  it('does not skip steps in 3-step wizard', () => {
-    expect(canJumpTo(1, snapshot({ apiKeys: [] }))).toBe(false)
-    expect(canJumpTo(1, snapshot())).toBe(true)
-    expect(canJumpTo(2, snapshot({ selectedModels: [] }))).toBe(false)
-    expect(canJumpTo(2, snapshot())).toBe(true)
-  })
-})
-
-describe('wizard submission gate', () => {
+describe('listing submission gate', () => {
   it('accepts the default limits and a valid multiplier', () => {
     expect(canSubmit(snapshot())).toBe(true)
+  })
+
+  it('requires a selected model the keys can call and a valid multiplier', () => {
+    expect(canSubmit(snapshot({ selectedModels: [] }))).toBe(false)
+    expect(canSubmit(snapshot({ selectedModels: ['not-served'] }))).toBe(false)
+    expect(
+      canSubmit(snapshot({ modelMultipliers: { 'deepseek-flash': 0 } })),
+    ).toBe(false)
+    expect(
+      canSubmit(snapshot({ modelMultipliers: { 'deepseek-flash': 1100 } })),
+    ).toBe(false)
+  })
+
+  it('requires valid limits and headers', () => {
+    expect(canSubmit(snapshot({ concurrency: 0 }))).toBe(false)
+    expect(canSubmit(snapshot({ rpm: -1 }))).toBe(false)
+    expect(canSubmit(snapshot({ dailyCapYuan: 'abc' }))).toBe(false)
+    expect(canSubmit(snapshot({ headersValid: false }))).toBe(false)
+    expect(canSubmit(snapshot({ headersValid: true }))).toBe(true)
   })
 
   it('requires the plan-terms checkbox for a plan channel', () => {
@@ -122,12 +86,6 @@ describe('wizard submission gate', () => {
     expect(
       canSubmit(snapshot({ requiresPlanTerms: true, planTermsAccepted: true })),
     ).toBe(true)
-  })
-
-  it('clamps previousWizardStep and nextWizardStep', () => {
-    expect(previousWizardStep(0)).toBe(0)
-    expect(previousWizardStep(2)).toBe(1)
-    expect(nextWizardStep(2, snapshot())).toBe(2)
   })
 })
 
