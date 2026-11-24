@@ -491,7 +491,9 @@ export function CreateKeyDialog({
                 {dialogCopy.advanced}
               </span>
               <span className="hidden text-meta font-normal text-ink-3 sm:inline">
-                {dialogCopy.advancedHint}
+                {keyType === 'standard'
+                  ? '过期时间、IP 白名单等设置都收在这里。'
+                  : dialogCopy.advancedHint}
               </span>
             </summary>
             <div className="space-y-4 border-t border-line px-4 py-4">
@@ -624,11 +626,13 @@ export function CreateKeyDialog({
                 </Field>
               </div>
 
-              <div className="grid gap-4 sm:grid-cols-2">
-                <KeyRoutingFields form={form} idPrefix="create-key" showScope={false} />
-              </div>
+              {keyType !== 'standard' ? (
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <KeyRoutingFields form={form} idPrefix="create-key" showScope={false} />
+                </div>
+              ) : null}
 
-              {scope === 'selected' && selectedCount > 0 ? (
+              {keyType !== 'standard' && scope === 'selected' && selectedCount > 0 ? (
                 <p className="text-meta text-ink-3">
                   {dialogCopy.models.selected(selectedCount)}
                 </p>

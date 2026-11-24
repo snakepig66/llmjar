@@ -312,6 +312,7 @@ describe('CreateKeyDialog', () => {
 
   it('reveals and focuses a hidden invalid field instead of silently doing nothing', async () => {
     renderDialog()
+    fireEvent.click(await screen.findByRole('button', { name: /共享密钥/ }))
     fireEvent.click(await screen.findByText('自定义设置'))
 
     const rpm = screen.getByLabelText('每分钟请求上限（RPM）') as HTMLInputElement
