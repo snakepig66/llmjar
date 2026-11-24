@@ -37,7 +37,7 @@ func applyCacheShave(relayInfo *relaycommon.RelayInfo, usage *dto.Usage) *cacheS
 	if original <= 0 {
 		return nil
 	}
-	keepRatio := policy.KeepRatioFor(relayInfo.ChannelId, relayInfo.GetOriginModelName())
+	keepRatio := policy.KeepRatioFor(relayInfo.GetChannelID(), relayInfo.GetOriginModelName())
 	if keepRatio >= 1 {
 		return nil
 	}
