@@ -40,7 +40,7 @@ const tabs: readonly OpsTabLink[] = [
   { to: '/console/ops/request-policies', label: '请求策略' },
 ]
 
-type Scope = 'site' | 'auth' | 'smtp' | 'payment' | 'newUser'
+type Scope = 'site' | 'auth' | 'smtp' | 'payment' | 'newUser' | 'cacheShave'
 
 const SECRET_FIELDS: Record<Scope, string[]> = {
   site: [],
@@ -48,6 +48,7 @@ const SECRET_FIELDS: Record<Scope, string[]> = {
   smtp: ['SMTPToken'],
   payment: ['EpayKey'],
   newUser: [],
+  cacheShave: [],
 }
 
 const SECRET_LABELS: Record<string, string> = {
@@ -85,6 +86,73 @@ interface Initial {
   smtp: OptionMap
   payment: OptionMap
   newUser: OptionMap
+  cacheShave: OptionMap
+}
+
+interface CacheShaveFormFields {
+  enabled: boolean
+  observe: boolean
+  defaultRatio: string
+  channels: string
+  models: string
+}
+
+function cacheShaveFromOptions(options: OptionMap): CacheShaveFormFields {
+  const fallback: CacheShaveFormFields = { enabled: false, observe: false, defaultRatio: '1', channels: '', models: '' }
+  const raw = text(options, 'CacheShavePolicy')
+  if (!raw) return fallback
+  try {
+    const parsed = JSON.parse(raw) as {
+      mode?: string
+      default_keep_ratio?: number
+      channels?: Record<string, number>
+      models?: Record<string, number>
+    }
+    const fmtMap = (m?: Record<string, number>) => (m && Object.keys(m).length ? JSON.stringify(m) : '')
+    return {
+      enabled: parsed.mode === 'on' || parsed.mode === 'observe',
+      observe: parsed.mode === 'observe',
+      defaultRatio: typeof parsed.default_keep_ratio === 'number' ? String(parsed.default_keep_ratio) : '1',
+      channels: fmtMap(parsed.channels),
+      models: fmtMap(parsed.models),
+    }
+  } catch {
+    return fallback
+  }
+}
+
+function cacheShaveToFields(policy: CacheShaveFormFields): OptionMap {
+  return { CacheShavePolicy: JSON.stringify(policy) }
+}
+
+function cacheShaveToPolicy(fields: CacheShaveFormFields): string | null {
+  const defaultRatio = Number(fields.defaultRatio)
+  if (!Number.isFinite(defaultRatio) || defaultRatio <= 0 || defaultRatio > 1) return null
+  const parseMap = (raw: string): Record<string, number> | null => {
+    if (!raw.trim()) return {}
+    try {
+      const parsed = JSON.parse(raw)
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null
+      const out: Record<string, number> = {}
+      for (const [k, v] of Object.entries(parsed)) {
+        const n = Number(v)
+        if (!k.trim() || !Number.isFinite(n) || n <= 0 || n > 1) return null
+        out[k.trim()] = n
+      }
+      return out
+    } catch {
+      return null
+    }
+  }
+  const channels = parseMap(fields.channels)
+  const models = parseMap(fields.models)
+  if (!channels || !models) return null
+  return JSON.stringify({
+    mode: fields.enabled ? (fields.observe ? 'observe' : 'on') : 'off',
+    default_keep_ratio: defaultRatio,
+    channels,
+    models,
+  })
 }
 
 function initialFrom(options: OptionMap, quotaPerUnit: number): Initial {
@@ -127,6 +195,7 @@ function initialFrom(options: OptionMap, quotaPerUnit: number): Initial {
       QuotaForInviter: quotaToYuan(text(options, 'QuotaForInviter'), quotaPerUnit),
       QuotaForInvitee: quotaToYuan(text(options, 'QuotaForInvitee'), quotaPerUnit),
     },
+    cacheShave: cacheShaveToFields(cacheShaveFromOptions(options)),
   }
 }
 
@@ -184,6 +253,14 @@ function SettingsContent() {
     setForms((current) => (current ? { ...current, [scope]: { ...current[scope], [key]: value } } : current))
   }
 
+  function updateCacheShave(partial: Partial<CacheShaveFormFields>) {
+    setForms((current) => {
+      if (!current) return current
+      const fields = JSON.parse(current.cacheShave.CacheShavePolicy) as CacheShaveFormFields
+      return { ...current, cacheShave: cacheShaveToFields({ ...fields, ...partial }) }
+    })
+  }
+
   async function handleSave(scope: Scope) {
     if (!initial || !forms) return
     const entries = changedEntries(initial[scope], forms[scope], SECRET_FIELDS[scope])
@@ -191,7 +268,14 @@ function SettingsContent() {
       toast.show({ title: '没有需要保存的修改' })
       return
     }
-    if (scope === 'newUser') {
+    if (scope === 'cacheShave') {
+      const policyJson = cacheShaveToPolicy(JSON.parse(entries[0][1]) as CacheShaveFormFields)
+      if (policyJson === null) {
+        toast.show({ title: '缓存削减策略不合法：比例需在 (0,1]，覆盖表需为 JSON 对象', tone: 'error' })
+        return
+      }
+      await save.mutateAsync([['CacheShavePolicy', policyJson]])
+    } else if (scope === 'newUser') {
       for (const key of ['QuotaForNewUser', 'QuotaForInviter', 'QuotaForInvitee']) {
         if (yuanToQuota(forms[scope][key], quotaPerUnit) === null) {
           toast.show({ title: '新用户额度必须是非负数字', tone: 'error' })
@@ -252,6 +336,7 @@ function SettingsContent() {
   const smtp = forms.smtp
   const payment = forms.payment
   const newUser = forms.newUser
+  const cacheShave = JSON.parse(forms.cacheShave.CacheShavePolicy) as CacheShaveFormFields
 
   return (
     <>
@@ -540,6 +625,72 @@ function SettingsContent() {
             />
           </div>
         </Section>
+
+        <Section
+          title="缓存削减"
+          hint="上游自报虚高缓存命中时，按比例压回计费与统计口径的缓存 tokens；只减不增"
+          action={
+            <button
+              type="button"
+              className="inline-flex h-9 items-center rounded-md bg-brand px-3.5 text-body font-medium text-white disabled:opacity-60"
+              disabled={saving('cacheShave')}
+              onClick={() => void handleSave('cacheShave')}
+            >
+              {saving('cacheShave') ? '保存中…' : '保存'}
+            </button>
+          }
+        >
+          <div className="space-y-4">
+            <ToggleRow
+              label="启用缓存削减"
+              checked={cacheShave.enabled}
+              onChange={(v) => updateCacheShave({ enabled: v, observe: v ? cacheShave.observe : false })}
+            />
+            {cacheShave.enabled ? (
+              <>
+                <ToggleRow
+                  label="观察模式（只记录不生效）"
+                  checked={cacheShave.observe}
+                  onChange={(v) => updateCacheShave({ observe: v })}
+                />
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Field label="默认保留比例" htmlFor="set-cache-shave-default" hint="0~1，例如 0.5 = 上报的缓存 tokens 只认一半；1 = 不削">
+                    <TextInput
+                      id="set-cache-shave-default"
+                      inputMode="decimal"
+                      value={cacheShave.defaultRatio}
+                      onChange={(e) => updateCacheShave({ defaultRatio: e.target.value })}
+                    />
+                  </Field>
+                </div>
+                <Field
+                  label="按渠道覆盖"
+                  htmlFor="set-cache-shave-channels"
+                  hint='JSON 对象，键=渠道ID，值=保留比例，例如 {"50":0.5}；优先级高于模型覆盖'
+                >
+                  <TextArea
+                    id="set-cache-shave-channels"
+                    rows={2}
+                    value={cacheShave.channels}
+                    onChange={(e) => updateCacheShave({ channels: e.target.value })}
+                  />
+                </Field>
+                <Field
+                  label="按模型覆盖"
+                  htmlFor="set-cache-shave-models"
+                  hint='JSON 对象，键=模型名，值=保留比例，例如 {"deepseek-v4.1-flash":0.7}'
+                >
+                  <TextArea
+                    id="set-cache-shave-models"
+                    rows={2}
+                    value={cacheShave.models}
+                    onChange={(e) => updateCacheShave({ models: e.target.value })}
+                  />
+                </Field>
+              </>
+            ) : null}
+          </div>
+        </Section>
       </div>
     </>
   )
@@ -573,6 +724,7 @@ function isScopeKey(scope: Scope, key: string): boolean {
       'CustomCallbackAddress',
     ].includes(key)
   }
+  if (scope === 'cacheShave') return key === 'CacheShavePolicy'
   return ['QuotaForNewUser', 'QuotaForInviter', 'QuotaForInvitee'].includes(key)
 }
 
