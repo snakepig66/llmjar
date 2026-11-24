@@ -113,6 +113,8 @@ export function KeysPage() {
   )
 }
 
+const BACKUP_API_URL = 'https://api.tipig.cloud/v1'
+
 function ApiAddressCard() {
   const baseUrl = `${currentBaseUrl()}/v1`
 
@@ -141,6 +143,18 @@ function ApiAddressCard() {
         </code>
         <CopyButton
           text={baseUrl}
+          label="复制"
+          toast="已复制 API 地址"
+          className="h-7 px-2.5 text-caption"
+        />
+      </div>
+      <div className="mt-3 flex flex-wrap items-center gap-2.5">
+        <span className="text-meta font-medium text-ink-2">备用地址</span>
+        <code className="rounded-md border border-line bg-bg px-2.5 py-1 font-mono text-meta text-ink tabular-nums selection:bg-brand/20">
+          {BACKUP_API_URL}
+        </code>
+        <CopyButton
+          text={BACKUP_API_URL}
           label="复制"
           toast="已复制 API 地址"
           className="h-7 px-2.5 text-caption"
