@@ -120,6 +120,19 @@ export const keyDetailQuery = (tokenId: number) =>
     staleTime: 10_000,
   })
 
+/** GET /api/user/self/groups — selectable channel groups for this user. */
+export const userGroupsQuery = () =>
+  queryOptions({
+    queryKey: ['console', 'user-groups'],
+    queryFn: () => api.get<Record<string, UserGroupInfo>>('/user/self/groups'),
+    staleTime: 60_000,
+  })
+
+export interface UserGroupInfo {
+  ratio: number | string
+  desc: string
+}
+
 export const usageStatsQuery = (days = 7) =>
   queryOptions({
     queryKey: ['console', 'usage-stats', days],

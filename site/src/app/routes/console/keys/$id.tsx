@@ -14,6 +14,7 @@ import {
   Dialog,
   Empty,
   Input,
+  Segmented,
   Tag,
   buttonClasses,
   useToast,
@@ -29,6 +30,8 @@ import {
   saveKeyPref,
   saveKeyTokenLimits,
   setTokenStatus,
+  updateToken,
+  userGroupsQuery,
 } from '@/features/console/api'
 import {
   ErrorBlock,
@@ -296,11 +299,14 @@ function KeyDetailContent({ tokenId, detail }: { tokenId: number; detail: KeyDet
       <KeyLimitsSection tokenId={tokenId} token={token} />
 
       {token.key_type === 'standard' ? (
-        <Section className="mt-9" title="可用模型" hint="普通密钥的模型范围">
+        <>
+          <KeyGroupSection token={token} />
+          <Section className="mt-9" title="可用模型" hint="普通密钥的模型范围">
           <div className="rounded-lg border border-brand/30 bg-brand-soft px-4 py-3 text-meta text-ink-2">
             普通密钥默认已开放模型广场的所有自营模型，开箱即用，走平台自营渠道分发，无需在此手动增删模型。
           </div>
-        </Section>
+          </Section>
+        </>
       ) : (
         <>
           <OfficialOnlyModels pref={pref} />
@@ -390,6 +396,76 @@ function OfficialOnlyModels({ pref }: { pref: KeyDetail['pref'] }) {
         {page.officialOnly.action}
       </Link>
     </Notice>
+  )
+}
+
+/**
+ * 普通密钥的渠道分组：GET /api/user/self/groups 给可选项，PUT /api/token/
+ * 全行写回分组。分组决定这把 key 命中哪一组自营渠道（abilities 按组路由），
+ * 共享密钥不走它。
+ */
+function KeyGroupSection({ token }: { token: TokenRecord }) {
+  const toast = useToast()
+  const queryClient = useQueryClient()
+  const groups = useQuery(userGroupsQuery())
+  const [saving, setSaving] = useState(false)
+  const current = token.group || 'default'
+
+  async function pick(group: string) {
+    if (group === current || saving) return
+    setSaving(true)
+    try {
+      await updateToken({ ...token, group })
+      toast.show({ title: '已更新渠道分组', tone: 'success' })
+      await queryClient.invalidateQueries({ queryKey: ['console', 'key', token.id] })
+      await queryClient.invalidateQueries({ queryKey: ['console', 'keys'] })
+    } catch (error) {
+      toast.show({
+        title: error instanceof ApiError ? error.message : shared.errorHint,
+        tone: 'error',
+      })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const entries = Object.entries(groups.data ?? {})
+  if (entries.length === 0 && !groups.data) return null
+  const options = entries.map(([name, info]) => ({
+    value: name,
+    label: (
+      <span>
+        {name}
+        <span className="text-ink-3">
+          {info?.desc && info.desc !== name ? ` · ${info.desc}` : ''}
+          {typeof info?.ratio === 'number' ? ` · ${info.ratio}x` : ''}
+        </span>
+      </span>
+    ),
+  }))
+  if (!options.some((option) => option.value === current)) {
+    options.push({ value: current, label: <span>{current}</span> })
+  }
+
+  return (
+    <Section
+      className="mt-9"
+      title="渠道分组"
+      hint="选择这把密钥走哪一组自营渠道；不同分组对应不同的渠道池和计费倍率。"
+    >
+      <div className="flex flex-wrap items-center gap-3">
+        <Segmented
+          options={options}
+          value={current}
+          onChange={(value) => void pick(value)}
+          disabled={saving || groups.isPending}
+          ariaLabel="渠道分组"
+        />
+        {saving ? (
+          <span className="text-meta text-ink-3">保存中…</span>
+        ) : null}
+      </div>
+    </Section>
   )
 }
 
