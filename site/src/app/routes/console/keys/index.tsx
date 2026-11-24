@@ -136,29 +136,31 @@ function ApiAddressCard() {
         </svg>
         <span>API 地址</span>
       </div>
-      <div className="mt-3 flex flex-wrap items-center gap-2.5">
-        <span className="text-meta font-medium text-ink-2">主地址</span>
-        <code className="rounded-md border border-line bg-bg px-2.5 py-1 font-mono text-meta text-ink tabular-nums selection:bg-brand/20">
-          {baseUrl}
-        </code>
-        <CopyButton
-          text={baseUrl}
-          label="复制"
-          toast="已复制 API 地址"
-          className="h-7 px-2.5 text-caption"
-        />
-      </div>
-      <div className="mt-3 flex flex-wrap items-center gap-2.5">
-        <span className="text-meta font-medium text-ink-2">备用地址</span>
-        <code className="rounded-md border border-line bg-bg px-2.5 py-1 font-mono text-meta text-ink tabular-nums selection:bg-brand/20">
-          {BACKUP_API_URL}
-        </code>
-        <CopyButton
-          text={BACKUP_API_URL}
-          label="复制"
-          toast="已复制 API 地址"
-          className="h-7 px-2.5 text-caption"
-        />
+      <div className="mt-3 flex flex-wrap items-center gap-x-8 gap-y-3">
+        <div className="flex flex-wrap items-center gap-2.5">
+          <span className="text-meta font-medium text-ink-2">主地址</span>
+          <code className="rounded-md border border-line bg-bg px-2.5 py-1 font-mono text-meta text-ink tabular-nums selection:bg-brand/20">
+            {baseUrl}
+          </code>
+          <CopyButton
+            text={baseUrl}
+            label="复制"
+            toast="已复制 API 地址"
+            className="h-7 px-2.5 text-caption"
+          />
+        </div>
+        <div className="flex flex-wrap items-center gap-2.5">
+          <span className="text-meta font-medium text-ink-2">备用地址</span>
+          <code className="rounded-md border border-line bg-bg px-2.5 py-1 font-mono text-meta text-ink tabular-nums selection:bg-brand/20">
+            {BACKUP_API_URL}
+          </code>
+          <CopyButton
+            text={BACKUP_API_URL}
+            label="复制"
+            toast="已复制 API 地址"
+            className="h-7 px-2.5 text-caption"
+          />
+        </div>
       </div>
       <p className="mt-2 text-caption text-ink-3">
         每把密钥可以单独设额度、到期时间和可用模型。
