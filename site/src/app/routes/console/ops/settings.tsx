@@ -23,6 +23,10 @@ import {
   TextInput,
   type OpsTabLink,
 } from '@/features/admin/components'
+import {
+  channelPoolModelsQuery,
+  channelsQuery,
+} from '@/features/admin/channels-api'
 import { adminErrorMessage } from '@/features/admin/errors'
 import {
   adminOptionsQuery,
@@ -93,12 +97,14 @@ interface CacheShaveFormFields {
   enabled: boolean
   observe: boolean
   defaultRatio: string
-  channels: string
-  models: string
+  /** key = 渠道ID（字符串），value = 保留比例输入值 */
+  channels: Record<string, string>
+  /** key = 模型名，value = 保留比例输入值 */
+  models: Record<string, string>
 }
 
 function cacheShaveFromOptions(options: OptionMap): CacheShaveFormFields {
-  const fallback: CacheShaveFormFields = { enabled: false, observe: false, defaultRatio: '1', channels: '', models: '' }
+  const fallback: CacheShaveFormFields = { enabled: false, observe: false, defaultRatio: '1', channels: {}, models: {} }
   const raw = text(options, 'CacheShavePolicy')
   if (!raw) return fallback
   try {
@@ -108,7 +114,11 @@ function cacheShaveFromOptions(options: OptionMap): CacheShaveFormFields {
       channels?: Record<string, number>
       models?: Record<string, number>
     }
-    const fmtMap = (m?: Record<string, number>) => (m && Object.keys(m).length ? JSON.stringify(m) : '')
+    const fmtMap = (m?: Record<string, number>) => {
+      const out: Record<string, string> = {}
+      for (const [k, v] of Object.entries(m ?? {})) out[k] = String(v)
+      return out
+    }
     return {
       enabled: parsed.mode === 'on' || parsed.mode === 'observe',
       observe: parsed.mode === 'observe',
@@ -128,21 +138,14 @@ function cacheShaveToFields(policy: CacheShaveFormFields): OptionMap {
 function cacheShaveToPolicy(fields: CacheShaveFormFields): string | null {
   const defaultRatio = Number(fields.defaultRatio)
   if (!Number.isFinite(defaultRatio) || defaultRatio <= 0 || defaultRatio > 1) return null
-  const parseMap = (raw: string): Record<string, number> | null => {
-    if (!raw.trim()) return {}
-    try {
-      const parsed = JSON.parse(raw)
-      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null
-      const out: Record<string, number> = {}
-      for (const [k, v] of Object.entries(parsed)) {
-        const n = Number(v)
-        if (!k.trim() || !Number.isFinite(n) || n <= 0 || n > 1) return null
-        out[k.trim()] = n
-      }
-      return out
-    } catch {
-      return null
+  const parseMap = (raw: Record<string, string>): Record<string, number> | null => {
+    const out: Record<string, number> = {}
+    for (const [k, v] of Object.entries(raw)) {
+      const n = Number(v)
+      if (!k.trim() || !Number.isFinite(n) || n <= 0 || n > 1) return null
+      out[k.trim()] = n
     }
+    return out
   }
   const channels = parseMap(fields.channels)
   const models = parseMap(fields.models)
@@ -228,6 +231,8 @@ function SettingsContent() {
   const queryClient = useQueryClient()
   const options = useQuery(adminOptionsQuery())
   const status = useQuery(siteStatusQuery())
+  const channels = useQuery(channelsQuery({ page: 1, pageSize: 100 }))
+  const poolModels = useQuery(channelPoolModelsQuery())
   const quotaPerUnit = status.data ?? 500_000
 
   const [initial, setInitial] = useState<Initial | null>(null)
@@ -271,7 +276,7 @@ function SettingsContent() {
     if (scope === 'cacheShave') {
       const policyJson = cacheShaveToPolicy(JSON.parse(entries[0][1]) as CacheShaveFormFields)
       if (policyJson === null) {
-        toast.show({ title: '缓存削减策略不合法：比例需在 (0,1]，覆盖表需为 JSON 对象', tone: 'error' })
+        toast.show({ title: '缓存削减策略不合法：保留比例需为 0~1 之间的数字', tone: 'error' })
         return
       }
       await save.mutateAsync([['CacheShavePolicy', policyJson]])
@@ -663,30 +668,20 @@ function SettingsContent() {
                     />
                   </Field>
                 </div>
-                <Field
+                <RatioCheckList
                   label="按渠道覆盖"
-                  htmlFor="set-cache-shave-channels"
-                  hint='JSON 对象，键=渠道ID，值=保留比例，例如 {"50":0.5}；优先级高于模型覆盖'
-                >
-                  <TextArea
-                    id="set-cache-shave-channels"
-                    rows={2}
-                    value={cacheShave.channels}
-                    onChange={(e) => updateCacheShave({ channels: e.target.value })}
-                  />
-                </Field>
-                <Field
+                  hint="勾选要削的渠道并填保留比例，优先级高于模型覆盖"
+                  items={(channels.data?.items ?? []).map((ch) => ({ key: String(ch.id), name: `#${ch.id} ${ch.name}` }))}
+                  values={cacheShave.channels}
+                  onChange={(channels) => updateCacheShave({ channels })}
+                />
+                <RatioCheckList
                   label="按模型覆盖"
-                  htmlFor="set-cache-shave-models"
-                  hint='JSON 对象，键=模型名，值=保留比例，例如 {"deepseek-v4.1-flash":0.7}'
-                >
-                  <TextArea
-                    id="set-cache-shave-models"
-                    rows={2}
-                    value={cacheShave.models}
-                    onChange={(e) => updateCacheShave({ models: e.target.value })}
-                  />
-                </Field>
+                  hint="勾选要削的模型并填保留比例"
+                  items={(poolModels.data ?? []).map((name) => ({ key: name, name }))}
+                  values={cacheShave.models}
+                  onChange={(models) => updateCacheShave({ models })}
+                />
               </>
             ) : null}
           </div>
@@ -726,6 +721,74 @@ function isScopeKey(scope: Scope, key: string): boolean {
   }
   if (scope === 'cacheShave') return key === 'CacheShavePolicy'
   return ['QuotaForNewUser', 'QuotaForInviter', 'QuotaForInvitee'].includes(key)
+}
+
+function RatioCheckList({
+  label,
+  hint,
+  items,
+  values,
+  onChange,
+}: {
+  label: string
+  hint: string
+  items: { key: string; name: string }[]
+  values: Record<string, string>
+  onChange: (values: Record<string, string>) => void
+}) {
+  const toggle = (key: string, checked: boolean) => {
+    if (checked) {
+      onChange({ ...values, [key]: '0.5' })
+    } else {
+      const next = { ...values }
+      delete next[key]
+      onChange(next)
+    }
+  }
+  const setRatio = (key: string, ratio: string) => {
+    onChange({ ...values, [key]: ratio })
+  }
+  return (
+    <div className="rounded-md border border-line bg-surface/40 px-4 py-3">
+      <div className="text-body font-medium text-ink">{label}</div>
+      <p className="mt-0.5 text-caption text-ink-3">{hint}</p>
+      {items.length === 0 ? (
+        <p className="mt-3 text-caption text-ink-3">加载中或暂无条目</p>
+      ) : (
+        <div className="mt-3 grid gap-2 sm:grid-cols-2">
+          {items.map((item) => {
+            const checked = item.key in values
+            return (
+              <div
+                key={item.key}
+                className="flex items-center gap-2 rounded-md border border-line bg-surface px-3 py-2"
+              >
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  onChange={(e) => toggle(item.key, e.target.checked)}
+                  className="h-4 w-4 accent-brand"
+                  aria-label={item.name}
+                />
+                <span className="min-w-0 flex-1 truncate text-body text-ink" title={item.name}>
+                  {item.name}
+                </span>
+                {checked ? (
+                  <TextInput
+                    aria-label={`${item.name} 保留比例`}
+                    inputMode="decimal"
+                    value={values[item.key] ?? ''}
+                    onChange={(e) => setRatio(item.key, e.target.value)}
+                    className="h-9 w-20 shrink-0"
+                  />
+                ) : null}
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
 }
 
 function ToggleRow({
