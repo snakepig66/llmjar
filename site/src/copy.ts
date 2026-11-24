@@ -726,7 +726,7 @@ console.log(response.choices[0].message.content)
         body: '三步即可发出第一笔请求：注册账号、在控制台创建 Key、把下面的示例粘贴到终端。模型名使用模型广场里的完整 ID，Key 放在 Authorization 头里。',
         steps: [
           { title: '创建 Key', body: '进入控制台创建 Key，按需勾选模型并设置价格上限。' },
-          { title: '选择模型', body: '在模型广场复制完整模型 ID，例如 deepseek-flash。' },
+          { title: '选择模型', body: '在模型广场复制完整模型 ID，例如 deepseek-v4.1-flash。' },
           { title: '发出请求', body: 'Base URL 指向本站 /v1，运行下面任意一个示例。' },
         ],
         modelsLabel: '当前可用模型（自动同步自模型池）',
@@ -851,7 +851,7 @@ console.log(response.choices[0].message.content)
           {
             name: 'Cherry Studio',
             body: '在「设置 → 模型服务」里添加 OpenAI 兼容服务，填入 Base URL 与 Key，然后添加模型。',
-            code: `Base URL: https://llmjar.com/v1\nAPI Key: <你的Key>\n模型: deepseek-flash`,
+            code: `Base URL: https://llmjar.com/v1\nAPI Key: <你的Key>\n模型: deepseek-v4.1-flash`,
           },
           {
             name: 'Claude Code',
@@ -861,7 +861,7 @@ console.log(response.choices[0].message.content)
           {
             name: 'Cursor',
             body: '在「Settings → Models → OpenAI API」里打开 Override OpenAI Base URL，填入 Base URL、Key 和模型名。',
-            code: `Override OpenAI Base URL: https://llmjar.com/v1\nAPI Key: <你的Key>\nModel: deepseek-flash`,
+            code: `Override OpenAI Base URL: https://llmjar.com/v1\nAPI Key: <你的Key>\nModel: deepseek-v4.1-flash`,
           },
         ],
       },
@@ -3202,7 +3202,7 @@ console.log(response.choices[0].message.content)
         },
         form: {
           name: '标准模型名',
-          namePlaceholder: '例如 deepseek-flash',
+          namePlaceholder: '例如 deepseek-v4.1-flash',
           originVendor: '原厂',
           originVendorPlaceholder: '例如 deepseek',
           context: '上下文长度',
@@ -3315,7 +3315,7 @@ console.log(response.choices[0].message.content)
           upstream: '上游模型名',
           upstreamPlaceholder: '例如 deepseek-chat',
           model: '标准模型',
-          modelPlaceholder: '例如 deepseek-flash',
+          modelPlaceholder: '例如 deepseek-v4.1-flash',
           coefficient: '系数（milli）',
           coefficientHint: '1000 表示 ×1.0',
           differences: '与官方差异（JSON）',

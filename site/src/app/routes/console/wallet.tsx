@@ -800,6 +800,7 @@ function submitPaymentForm(url: string, params: Record<string, string>) {
 function RedeemPanel() {
   const toast = useToast()
   const queryClient = useQueryClient()
+  const info = useQuery(topupInfoQuery())
   const [code, setCode] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
@@ -828,6 +829,22 @@ function RedeemPanel() {
     } finally {
       setSubmitting(false)
     }
+  }
+
+  if (info.data?.enable_redemption === false) {
+    return (
+      <section className="glass p-6">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-title font-semibold tracking-tight text-ink">
+            {page.redeem.title}
+          </h2>
+          <Tag tone="neutral">{page.recharge.unconfiguredTag ?? '未配置'}</Tag>
+        </div>
+        <p className="mt-2 text-meta leading-6 text-ink-3">
+          兑换码功能未开启，请联系管理员
+        </p>
+      </section>
+    )
   }
 
   return (

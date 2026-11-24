@@ -3,7 +3,7 @@ import { Link, createFileRoute } from '@tanstack/react-router'
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 
 import { copy } from '@/copy'
-import { squareModelsQuery } from '@/features/market/api'
+import { plazaModelsQuery } from '@/features/market/api'
 import { copyText } from '@/features/market/clipboard'
 import { CodeBlock, type CodeTabItem } from '@/features/market/code-block'
 import { cn } from '@/lib/cn'
@@ -265,14 +265,18 @@ function useScrollSpy(visible: readonly SectionId[]) {
 
 export function DocsPage() {
   const docs = copy.pages.docs
-  const models = useQuery(squareModelsQuery())
+  const models = useQuery(plazaModelsQuery())
+  const usableModels = useMemo(
+    () => (models.data ?? []).filter((m) => m.enable_plaza),
+    [models.data],
+  )
   const baseUrl = docs.baseUrl
   const [search, setSearch] = useState('')
   const searchRef = useRef<HTMLInputElement>(null)
 
   // The first live model keeps the snippets runnable; the seed id is only a
   // fallback while the square request is in flight or unavailable.
-  const model = models.data?.[0]?.model ?? 'deepseek-flash'
+  const model = usableModels[0]?.model ?? 'deepseek-v4.1-flash'
   const query = search.trim().toLowerCase()
 
   const keywords: Record<SectionId, string> = useMemo(
@@ -468,11 +472,11 @@ export function DocsPage() {
                 })}
               />
               <p className="text-meta leading-6 text-ink-3">{docs.quickstart.note}</p>
-              {models.data && models.data.length > 0 ? (
+              {usableModels.length > 0 ? (
                 <div className="mt-4">
                   <p className="text-meta text-ink-3">{docs.quickstart.modelsLabel}</p>
                   <div className="mt-2 flex flex-wrap gap-2">
-                    {models.data.map((m) => (
+                    {usableModels.map((m) => (
                       <Link
                         key={m.model}
                         to="/models/$id"
