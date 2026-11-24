@@ -246,9 +246,11 @@ function KeyDetailContent({ tokenId, detail }: { tokenId: number; detail: KeyDet
             </span>
             <span>
               {copy.pages.consoleKeys.columns.models}：
-              {pref?.model_scope === 'all'
-                ? page.models.allScopeTitle
-                : copy.pages.consoleKeys.modelsUnit(models.length)}
+              {token.key_type === 'standard'
+                ? '全部自营模型'
+                : pref?.model_scope === 'all'
+                  ? page.models.allScopeTitle
+                  : copy.pages.consoleKeys.modelsUnit(models.length)}
             </span>
             <span>{page.status.hint}</span>
           </div>
@@ -274,27 +276,29 @@ function KeyDetailContent({ tokenId, detail }: { tokenId: number; detail: KeyDet
         </div>
       </div>
 
-      <Section className="mt-8" title={page.config.title} hint={page.config.hint}>
-        {!pref ? <Notice className="mb-4">{page.config.noPref}</Notice> : null}
-        <form onSubmit={savePref} className="grid gap-4 sm:grid-cols-2" noValidate>
-          <KeyRoutingFields form={form} idPrefix="pref" />
+      {token.key_type !== 'standard' ? (
+        <Section className="mt-8" title={page.config.title} hint={page.config.hint}>
+          {!pref ? <Notice className="mb-4">{page.config.noPref}</Notice> : null}
+          <form onSubmit={savePref} className="grid gap-4 sm:grid-cols-2" noValidate>
+            <KeyRoutingFields form={form} idPrefix="pref" />
 
-          {form.formState.errors.root?.message ? (
-            <p
-              role="alert"
-              className="border border-danger/25 bg-danger/10 px-3 py-2 text-meta text-danger sm:col-span-2"
-            >
-              {form.formState.errors.root.message}
-            </p>
-          ) : null}
+            {form.formState.errors.root?.message ? (
+              <p
+                role="alert"
+                className="border border-danger/25 bg-danger/10 px-3 py-2 text-meta text-danger sm:col-span-2"
+              >
+                {form.formState.errors.root.message}
+              </p>
+            ) : null}
 
-          <div className="flex justify-end sm:col-span-2">
-            <Button type="submit" loading={form.formState.isSubmitting}>
-              {form.formState.isSubmitting ? page.config.saving : page.config.save}
-            </Button>
-          </div>
-        </form>
-      </Section>
+            <div className="flex justify-end sm:col-span-2">
+              <Button type="submit" loading={form.formState.isSubmitting}>
+                {form.formState.isSubmitting ? page.config.saving : page.config.save}
+              </Button>
+            </div>
+          </form>
+        </Section>
+      ) : null}
 
       <KeyLimitsSection tokenId={tokenId} token={token} />
 
