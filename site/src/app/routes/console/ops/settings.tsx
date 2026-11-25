@@ -30,8 +30,10 @@ import {
 import { adminErrorMessage } from '@/features/admin/errors'
 import {
   adminOptionsQuery,
+  cacheShaveStatsQuery,
   siteStatusQuery,
   updateOptions,
+  type CacheShaveStats,
   type OptionMap,
 } from '@/features/admin/settings-api'
 
@@ -233,6 +235,7 @@ function SettingsContent() {
   const status = useQuery(siteStatusQuery())
   const channels = useQuery(channelsQuery({ page: 1, pageSize: 100 }))
   const poolModels = useQuery(channelPoolModelsQuery())
+  const cacheShaveStats = useQuery(cacheShaveStatsQuery(24))
   const quotaPerUnit = status.data ?? 500_000
 
   const [initial, setInitial] = useState<Initial | null>(null)
@@ -682,6 +685,7 @@ function SettingsContent() {
                   values={cacheShave.models}
                   onChange={(models) => updateCacheShave({ models })}
                 />
+                <CacheShaveStatsPanel stats={cacheShaveStats.data ?? null} loading={cacheShaveStats.isLoading} />
               </>
             ) : null}
           </div>
@@ -785,6 +789,67 @@ function RatioCheckList({
               </div>
             )
           })}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function formatTokens(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`
+  return String(n)
+}
+
+function CacheShaveStatsPanel({
+  stats,
+  loading,
+}: {
+  stats: CacheShaveStats | null
+  loading: boolean
+}) {
+  const rows = stats?.channels ?? []
+  return (
+    <div className="rounded-md border border-line bg-surface/40 px-4 py-3">
+      <div className="flex items-center justify-between">
+        <div className="text-body font-medium text-ink">削减统计（近 24 小时）</div>
+        {stats ? (
+          <span className="text-caption text-ink-3">
+            共 {stats.total.requests} 次命中 · 削掉 {formatTokens(stats.total.shaved)} / 原报 {formatTokens(stats.total.original)}
+            {stats.total.observed > 0 ? ` · ${stats.total.observed} 次仅观察` : ''}
+          </span>
+        ) : null}
+      </div>
+      {loading ? (
+        <p className="mt-3 text-caption text-ink-3">加载中…</p>
+      ) : rows.length === 0 ? (
+        <p className="mt-3 text-caption text-ink-3">
+          近 24 小时没有命中削减策略的请求。开启开关并配置比例后，有缓存命中的流量会在这里出数。
+        </p>
+      ) : (
+        <div className="mt-3 overflow-x-auto">
+          <table className="w-full text-left text-caption">
+            <thead>
+              <tr className="text-ink-3">
+                <th className="pb-2 pr-4 font-medium">渠道</th>
+                <th className="pb-2 pr-4 font-medium">请求数</th>
+                <th className="pb-2 pr-4 font-medium">原报缓存</th>
+                <th className="pb-2 pr-4 font-medium">削后</th>
+                <th className="pb-2 font-medium">削掉</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row) => (
+                <tr key={row.channel_id} className="border-t border-line/60 text-ink">
+                  <td className="py-2 pr-4">#{row.channel_id} {row.channel_name ?? ''}</td>
+                  <td className="py-2 pr-4 tabular-nums">{row.requests}</td>
+                  <td className="py-2 pr-4 tabular-nums">{formatTokens(row.original)}</td>
+                  <td className="py-2 pr-4 tabular-nums">{formatTokens(row.effective)}</td>
+                  <td className="py-2 tabular-nums font-medium text-brand">{formatTokens(row.shaved)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
     </div>

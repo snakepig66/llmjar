@@ -78,3 +78,29 @@ export const requestPolicyQuery = () =>
 export function updateRequestPolicy(options: OptionMap): Promise<unknown> {
   return api.patch<unknown>('/option/request_policy', { options })
 }
+
+export interface CacheShaveBucket {
+  channel_id?: number
+  channel_name?: string
+  requests: number
+  applied: number
+  observed: number
+  original: number
+  effective: number
+  shaved: number
+}
+
+export interface CacheShaveStats {
+  window_hours: number
+  total: CacheShaveBucket
+  channels: CacheShaveBucket[]
+}
+
+/** 缓存削减统计：聚合消费日志管理侧的 cache_shave 记录。 */
+export const cacheShaveStatsQuery = (hours = 24) =>
+  queryOptions({
+    queryKey: ['admin', 'cache-shave-stats', hours],
+    queryFn: async (): Promise<CacheShaveStats | null> =>
+      (await api.get<CacheShaveStats>('/option/cache_shave/stats', { query: { hours } })) ?? null,
+    staleTime: 60_000,
+  })

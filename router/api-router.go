@@ -257,6 +257,7 @@ func SetApiRouter(router *gin.Engine) {
 			optionRoute.POST("/model_pricing/preview", controller.PreviewModelPricing)
 			optionRoute.POST("/payment_compliance", controller.ConfirmPaymentCompliance)
 			optionRoute.GET("/channel_affinity_cache", controller.GetChannelAffinityCacheStats)
+			optionRoute.GET("/cache_shave/stats", controller.GetCacheShaveStats)
 			optionRoute.DELETE("/channel_affinity_cache", controller.ClearChannelAffinityCache)
 			optionRoute.POST("/rest_model_ratio", controller.ResetModelRatio)
 			optionRoute.GET("/waffo-pancake/catalog", controller.ListWaffoPancakeCatalog)
