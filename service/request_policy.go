@@ -1,6 +1,7 @@
 package service
 
 import (
+	"github.com/QuantumNous/new-api/common/channelrpm"
 	"slices"
 	"sync"
 	"time"
@@ -87,6 +88,7 @@ func (s *RequestPolicyState) Events() []PolicyEvent {
 }
 
 func (s *RequestPolicyState) BeginAttempt(channel *model.Channel, group string) {
+	channelrpm.RecordHit(channel.Id)
 	s.Attempts++
 	s.Successful = false
 	s.OutcomeRecorded = false

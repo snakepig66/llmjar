@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/common/channelrpm"
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/logger"
@@ -199,21 +200,31 @@ func GetRandomSatisfiedChannel(
 		smoothingFactor = 100
 	}
 
-	// Calculate the total weight of all channels up to endIdx
-	totalWeight := sumWeight * smoothingFactor
+	// 软加权：接近 RPM 上限的渠道权重按 channelrpm.HeadroomFactor 衰减，
+	// 总权重按衰减后的值求和，保证随机落点必然命中某个渠道。
+	scaledWeights := make([]int, len(targetChannels))
+	totalWeight := 0
+	for i, channel := range targetChannels {
+		scaled := int(float64(channel.GetWeight()*smoothingFactor)*channelrpm.HeadroomFactor(channel.Id)) + smoothingAdjustment
+		if scaled < 1 {
+			scaled = 1
+		}
+		scaledWeights[i] = scaled
+		totalWeight += scaled
+	}
 
 	// Generate a random value in the range [0, totalWeight)
 	randomWeight := rand.Intn(totalWeight)
 
 	// Find a channel based on its weight
-	for _, channel := range targetChannels {
-		randomWeight -= channel.GetWeight()*smoothingFactor + smoothingAdjustment
+	for i, channel := range targetChannels {
+		randomWeight -= scaledWeights[i]
 		if randomWeight < 0 {
 			return channel, nil
 		}
 	}
-	// return null if no channel is not found
-	return nil, errors.New("channel not found")
+	// 浮点缩放取整可能漏掉末端，兜底返回最后一个渠道。
+	return targetChannels[len(targetChannels)-1], nil
 }
 
 func CacheGetChannel(id int) (*Channel, error) {

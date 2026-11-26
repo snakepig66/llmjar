@@ -1,6 +1,7 @@
 package service
 
 import (
+	"github.com/QuantumNous/new-api/common/channelrpm"
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
@@ -69,6 +70,9 @@ func ProcessChannelError(c *gin.Context, channelError types.ChannelError, err *t
 	marketplace.ProcessRelayChannelError(c, err)
 	upstreamURLs := common.UpstreamAddresses(c)
 	logger.LogError(c, common.LogText("channel error (channel #%d, status code: %d): %s", channelError.ChannelId, err.StatusCode, common.LocalLogPreview(err.MaskSensitiveErrorWithStatusCode(upstreamURLs...))))
+	if err.StatusCode == 429 {
+		channelrpm.LearnCapFromRateLimit(channelError.ChannelId)
+	}
 	if ShouldDisableChannel(err) && channelError.AutoBan {
 		reason := err.MaskSensitiveErrorWithStatusCode(upstreamURLs...)
 		gopool.Go(func() {

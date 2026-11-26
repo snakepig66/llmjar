@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/common/channelrpm"
 	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
 
@@ -150,16 +151,21 @@ func GetChannel(
 	}
 	channel := Channel{}
 	if len(abilities) > 0 {
-		// Randomly choose one
-		weightSum := uint(0)
-		for _, ability_ := range abilities {
-			weightSum += ability_.Weight + 10
+		// 软加权：接近 RPM 上限的渠道权重自动衰减（因子见 channelrpm），下限保底 1。
+		scaledWeights := make([]int, len(abilities))
+		weightSum := 0
+		for i, ability_ := range abilities {
+			w := int(float64(ability_.Weight+10) * channelrpm.HeadroomFactor(ability_.ChannelId))
+			if w < 1 {
+				w = 1
+			}
+			scaledWeights[i] = w
+			weightSum += w
 		}
 		// Randomly choose one
-		weight := common.GetRandomInt(int(weightSum))
-		for _, ability_ := range abilities {
-			weight -= int(ability_.Weight) + 10
-			//log.Printf("weight: %d, ability weight: %d", weight, *ability_.Weight)
+		weight := common.GetRandomInt(weightSum)
+		for i, ability_ := range abilities {
+			weight -= scaledWeights[i]
 			if weight <= 0 {
 				channel.Id = ability_.ChannelId
 				break
