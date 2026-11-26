@@ -960,6 +960,10 @@ func testChannelForHealthCheck(ctx context.Context, channel *model.Channel, test
 		summary.Disabled++
 	}
 
+	if channel.Status == common.ChannelStatusAutoDisabled && newAPIError != nil {
+		service.MarkChannelRecoveryTestFailed(channel.Id)
+	}
+
 	if result.localErr == nil && !isChannelEnabled && service.ShouldEnableChannel(newAPIError, channel.Status) {
 		service.EnableChannel(channel.Id, common.GetContextKeyString(result.context, constant.ContextKeyChannelKey), channel.Name)
 		summary.Enabled++
@@ -1127,6 +1131,9 @@ func selectChannelsForAutomaticTest(channels []*model.Channel, mode string) []*m
 			continue
 		}
 		if mode == operation_setting.ChannelTestModePassiveRecovery && channel.Status != common.ChannelStatusAutoDisabled {
+			continue
+		}
+		if channel.Status == common.ChannelStatusAutoDisabled && !service.IsChannelRecoveryDue(channel.Id) {
 			continue
 		}
 		selected = append(selected, channel)
