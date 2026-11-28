@@ -68,11 +68,11 @@ func ClearChannelRecovery(channelId int) {
 
 // healthyTestInterval 是健康渠道例行测速的最小间隔。
 // 自动复测调度为了支持熔断退避每分钟跑一轮，不能按这个频率打健康渠道。
-const healthyTestInterval = 10 * time.Minute
+const healthyTestInterval = 3 * time.Hour
 
 var healthyTestTimes sync.Map // map[int]time.Time
 
-// IsHealthyTestDue 判断健康渠道是否到达例行测速时间（10 分钟一次）。
+// IsHealthyTestDue 判断健康渠道是否到达例行测速时间（3 小时一次）。
 func IsHealthyTestDue(channelId int) bool {
 	raw, ok := healthyTestTimes.Load(channelId)
 	if !ok {
