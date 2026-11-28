@@ -3777,9 +3777,9 @@ console.log(response.choices[0].message.content)
         range: '时间范围',
       },
       ranges: {
-        '1h': '最近 1 小时',
-        '24h': '最近 24 小时',
-        '7d': '最近 7 天',
+        today: '今日',
+        week: '本周',
+        month: '本月',
       },
       columns: {
         channel: '渠道',

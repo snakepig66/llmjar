@@ -44,11 +44,7 @@ const page = copy.pages.adminMetrics
 
 type RangeKey = keyof typeof page.ranges
 
-const RANGE_HOURS: Record<RangeKey, number> = {
-  '1h': 1,
-  '24h': 24,
-  '7d': 24 * 7,
-}
+const RANGE_KEYS: readonly RangeKey[] = ['today', 'week', 'month']
 
 function formatTokens(value: number): string {
   if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`
@@ -74,13 +70,12 @@ const tabs: readonly OpsTabLink[] = [
 ]
 
 export function MetricsContent() {
-  const [range, setRange] = useState<RangeKey>('24h')
-  const hours = RANGE_HOURS[range]
-  const stats = useQuery(channelTokenStatsQuery(hours))
+  const [range, setRange] = useState<RangeKey>('today')
+  const stats = useQuery(channelTokenStatsQuery(range))
 
   const rangeOptions = useMemo(
     () =>
-      (Object.keys(RANGE_HOURS) as RangeKey[]).map((value) => ({
+      RANGE_KEYS.map((value) => ({
         value,
         label: page.ranges[value],
       })),

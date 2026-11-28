@@ -2,7 +2,6 @@ package controller
 
 import (
 	"net/http"
-	"strconv"
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
@@ -21,16 +20,35 @@ type channelTokenStatsRow struct {
 	RequestShare     float64 `json:"request_share"`
 }
 
-// GetChannelTokenStats 按渠道聚合最近 N 小时的消费 token 量与占比，
+// beijingNow 用固定 +8 时区求北京日历边界，与服务器本地时区无关。
+var beijingLocation = time.FixedZone("Asia/Shanghai", 8*3600)
+
+// channelTokenStatsSince 按 period 求统计起点：今日/本周（周一起）/本月，均按北京日历；
+// 缺省或未知值回退到最近 24 小时。
+func channelTokenStatsSince(period string) (since int64, label string) {
+	now := time.Now().In(beijingLocation)
+	midnight := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, beijingLocation)
+	switch period {
+	case "today":
+		return midnight.Unix(), "今日"
+	case "week":
+		weekday := int(now.Weekday())
+		if weekday == 0 {
+			weekday = 7
+		}
+		return midnight.AddDate(0, 0, -(weekday - 1)).Unix(), "本周"
+	case "month":
+		return time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, beijingLocation).Unix(), "本月"
+	}
+	return time.Now().Add(-24 * time.Hour).Unix(), "最近 24 小时"
+}
+
+// GetChannelTokenStats 按渠道聚合一个日历周期内的消费 token 量与占比，
 // 供运营看板展示「各渠道跑了多少、占多少」。
 func GetChannelTokenStats(c *gin.Context) {
-	hours := 24
-	if raw := c.Query("hours"); raw != "" {
-		if parsed, err := strconv.Atoi(raw); err == nil && parsed > 0 {
-			hours = min(parsed, 24*30)
-		}
-	}
-	since := time.Now().Add(-time.Duration(hours) * time.Hour).Unix()
+	period := c.DefaultQuery("period", "")
+	since, periodLabel := channelTokenStatsSince(period)
+	hours := int(time.Since(time.Unix(since, 0)).Hours()) + 1
 
 	type row struct {
 		ChannelId        int   `gorm:"column:channel_id"`
@@ -96,6 +114,7 @@ func GetChannelTokenStats(c *gin.Context) {
 		"success": true,
 		"data": gin.H{
 			"window_hours": hours,
+			"period":       periodLabel,
 			"total": gin.H{
 				"requests":         totalRequests,
 				"prompt_tokens":    sumPromptTokens(stats),

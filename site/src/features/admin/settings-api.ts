@@ -127,10 +127,12 @@ export interface ChannelTokenStats {
   channels: ChannelTokenStatsRow[]
 }
 
-export const channelTokenStatsQuery = (hours = 24) =>
+export type ChannelTokenStatsPeriod = 'today' | 'week' | 'month'
+
+export const channelTokenStatsQuery = (period: ChannelTokenStatsPeriod = 'today') =>
   queryOptions({
-    queryKey: ['admin', 'channel-token-stats', hours],
+    queryKey: ['admin', 'channel-token-stats', period],
     queryFn: async (): Promise<ChannelTokenStats | null> =>
-      (await api.get<ChannelTokenStats>('/option/channel_token_stats', { query: { hours } })) ?? null,
+      (await api.get<ChannelTokenStats>('/option/channel_token_stats', { query: { period } })) ?? null,
     staleTime: 30_000,
   })

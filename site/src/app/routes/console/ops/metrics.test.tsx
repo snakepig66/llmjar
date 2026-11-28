@@ -99,10 +99,10 @@ describe('admin metrics page', () => {
     renderPage()
     await screen.findByText('open design')
 
-    fireEvent.click(screen.getByRole('tab', { name: '最近 7 天' }))
+    fireEvent.click(screen.getByRole('tab', { name: '本月' }))
     await waitFor(() =>
       expect(
-        requestedURLs.some((url) => url.includes('hours=168')),
+        requestedURLs.some((url) => url.includes('period=month')),
       ).toBe(true),
     )
   })
