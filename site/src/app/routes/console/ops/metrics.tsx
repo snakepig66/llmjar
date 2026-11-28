@@ -1,9 +1,8 @@
 /**
- * 运营后台 · 派生指标（P5）。
+ * 运营后台 · 渠道用量。
  *
- * 只读页面：按指标名与时间范围读取 mp_ops_metrics 的小时桶，展示断流率、
- * 503 原因、指纹异常、订阅信号、槽位占用与预占偏差。数值格式按指标语义
- * 区分（比率、微元、计数），前端不做任何写操作。
+ * 只读页面：按时间范围聚合消费日志，展示各渠道 token 消耗、请求数与占比。
+ * 数据来自 /option/channel_token_stats，前端不做任何写操作。
  */
 
 import { useQuery } from '@tanstack/react-query'
@@ -11,8 +10,6 @@ import { createFileRoute } from '@tanstack/react-router'
 import { useMemo, useState } from 'react'
 
 import { copy } from '@/copy'
-import { formatYuan } from '@/lib/money'
-import { formatDateTime } from '@/lib/time'
 import {
   Empty,
   PageHeader,
@@ -25,23 +22,17 @@ import {
 } from '@/ui'
 
 import {
-  OPS_METRIC_NAMES,
-  OPS_METRIC_RANGES,
-  opsMetricSince,
-  opsMetricsQuery,
-  type AdminOpsMetric,
-  type OpsMetricName,
-  type OpsMetricRange,
-} from '@/features/admin/api'
+  channelTokenStatsQuery,
+  type ChannelTokenStats,
+  type ChannelTokenStatsRow,
+} from '@/features/admin/settings-api'
 import {
   ErrorBlock,
-  Field,
   FilterTabs,
   OpsTabNav,
   PageSkeleton,
   RootOnly,
   Section,
-  Select,
   type OpsTabLink,
 } from '@/features/admin/components'
 
@@ -51,27 +42,22 @@ export const Route = createFileRoute('/console/ops/metrics')({
 
 const page = copy.pages.adminMetrics
 
-function metricLabel(name: string): string {
-  return (page.metricNames as Record<string, string>)[name] ?? name
+type RangeKey = keyof typeof page.ranges
+
+const RANGE_HOURS: Record<RangeKey, number> = {
+  '1h': 1,
+  '24h': 24,
+  '7d': 24 * 7,
 }
 
-/** Metric-specific display: rate as a percentage, deviation as money. */
-function metricValue(row: AdminOpsMetric): string {
-  if (row.metric_name === 'stream_cut_rate') {
-    return `${(row.metric_value * 100).toFixed(2)}%`
-  }
-  if (row.metric_name === 'pre_freeze_deviation') {
-    return formatYuan(Math.round(row.metric_value))
-  }
-  return Number.isInteger(row.metric_value)
-    ? String(row.metric_value)
-    : row.metric_value.toFixed(2)
+function formatTokens(value: number): string {
+  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`
+  if (value >= 1_000) return `${(value / 1_000).toFixed(1)}k`
+  return String(value)
 }
 
-function dimensionsText(row: AdminOpsMetric): string {
-  const entries = Object.entries(row.dimensions)
-  if (entries.length === 0) return page.none
-  return entries.map(([key, value]) => `${key}=${String(value)}`).join(', ')
+function formatCount(value: number): string {
+  return value.toLocaleString('zh-CN')
 }
 
 function MetricsPage() {
@@ -83,21 +69,26 @@ function MetricsPage() {
 }
 
 const tabs: readonly OpsTabLink[] = [
-  { to: '/console/ops/metrics', label: '指标看板' },
+  { to: '/console/ops/metrics', label: '渠道用量' },
   { to: '/console/ops/trace', label: '全链路排查' },
 ]
 
 export function MetricsContent() {
-  const [metricName, setMetricName] = useState<OpsMetricName | ''>('')
-  const [range, setRange] = useState<OpsMetricRange>('24h')
-  const since = useMemo(() => opsMetricSince(range), [range])
-  const rows = useQuery(opsMetricsQuery({ metric_name: metricName, since }))
+  const [range, setRange] = useState<RangeKey>('24h')
+  const hours = RANGE_HOURS[range]
+  const stats = useQuery(channelTokenStatsQuery(hours))
 
-  const rangeOptions = OPS_METRIC_RANGES.map((value) => ({
-    value,
-    label: page.ranges[value],
-  }))
-  const items = rows.data ?? []
+  const rangeOptions = useMemo(
+    () =>
+      (Object.keys(RANGE_HOURS) as RangeKey[]).map((value) => ({
+        value,
+        label: page.ranges[value],
+      })),
+    [],
+  )
+
+  const data = stats.data ?? null
+  const items = data?.channels ?? []
 
   return (
     <>
@@ -105,26 +96,6 @@ export function MetricsContent() {
       <PageHeader title={page.title} lead={page.lead} />
 
       <div className="mt-6 flex flex-wrap items-start gap-x-6 gap-y-4">
-        <Field
-          label={page.filters.metric}
-          htmlFor="metrics-metric"
-          className="w-full sm:w-64"
-        >
-          <Select
-            id="metrics-metric"
-            value={metricName}
-            onChange={(event) =>
-              setMetricName(event.target.value as OpsMetricName | '')
-            }
-          >
-            <option value="">{page.filters.all}</option>
-            {OPS_METRIC_NAMES.map((name) => (
-              <option key={name} value={name}>
-                {metricLabel(name)}
-              </option>
-            ))}
-          </Select>
-        </Field>
         <div className="min-w-0">
           <span className="mb-2 block text-body font-medium text-ink">
             {page.filters.range}
@@ -139,10 +110,10 @@ export function MetricsContent() {
       </div>
 
       <div className="mt-6">
-        {rows.isPending ? (
+        {stats.isPending ? (
           <PageSkeleton rows={6} />
-        ) : rows.isError ? (
-          <ErrorBlock error={rows.error} onRetry={() => void rows.refetch()} />
+        ) : stats.isError ? (
+          <ErrorBlock error={stats.error} onRetry={() => void stats.refetch()} />
         ) : items.length === 0 ? (
           <Empty
             title={page.empty.title}
@@ -151,7 +122,7 @@ export function MetricsContent() {
           />
         ) : (
           <Section title={page.title} hint={items.length}>
-            <MetricTable rows={items} />
+            <ChannelTable rows={items} total={data!.total} />
           </Section>
         )}
       </div>
@@ -159,34 +130,78 @@ export function MetricsContent() {
   )
 }
 
-function MetricTable({ rows }: { rows: AdminOpsMetric[] }) {
+function ChannelTable({
+  rows,
+  total,
+}: {
+  rows: ChannelTokenStatsRow[]
+  total: ChannelTokenStats['total']
+}) {
   return (
-    <Table minWidth={720} size="compact">
+    <Table minWidth={760} size="compact">
       <TableHead>
         <TableRow interactive={false}>
-          <TableHeaderCell>{page.columns.metric}</TableHeaderCell>
-          <TableHeaderCell numeric>{page.columns.value}</TableHeaderCell>
-          <TableHeaderCell>{page.columns.dimensions}</TableHeaderCell>
-          <TableHeaderCell>{page.columns.bucketTime}</TableHeaderCell>
+          <TableHeaderCell>{page.columns.channel}</TableHeaderCell>
+          <TableHeaderCell numeric>{page.columns.requests}</TableHeaderCell>
+          <TableHeaderCell numeric>{page.columns.prompt}</TableHeaderCell>
+          <TableHeaderCell numeric>{page.columns.completion}</TableHeaderCell>
+          <TableHeaderCell numeric>{page.columns.total}</TableHeaderCell>
+          <TableHeaderCell>{page.columns.share}</TableHeaderCell>
         </TableRow>
       </TableHead>
       <TableBody>
+        <TableRow interactive={false} className="bg-bg-subtle">
+          <TableCell>
+            <span className="font-semibold text-ink">{page.totalRow}</span>
+          </TableCell>
+          <TableCell numeric className="font-semibold tabular-nums">
+            {formatCount(total.requests)}
+          </TableCell>
+          <TableCell numeric className="font-semibold tabular-nums">
+            {formatTokens(total.prompt_tokens)}
+          </TableCell>
+          <TableCell numeric className="font-semibold tabular-nums">
+            {formatTokens(total.completion_tokens)}
+          </TableCell>
+          <TableCell numeric className="font-semibold tabular-nums">
+            {formatTokens(total.total_tokens)}
+          </TableCell>
+          <TableCell />
+        </TableRow>
         {rows.map((row) => (
-          <TableRow key={row.id}>
+          <TableRow key={row.channel_id}>
             <TableCell>
               <span className="font-medium text-ink">
-                {metricLabel(row.metric_name)}
+                {row.channel_name || `#${row.channel_id}`}
               </span>
               <span className="ml-2 font-mono text-caption text-ink-3">
-                {row.metric_name}
+                #{row.channel_id}
               </span>
             </TableCell>
-            <TableCell numeric>{metricValue(row)}</TableCell>
-            <TableCell className="max-w-[320px] truncate font-mono text-meta text-ink-2">
-              <span title={dimensionsText(row)}>{dimensionsText(row)}</span>
+            <TableCell numeric className="tabular-nums">
+              {formatCount(row.requests)}
             </TableCell>
-            <TableCell className="whitespace-nowrap tabular-nums text-meta text-ink-3">
-              {formatDateTime(row.bucket_time)}
+            <TableCell numeric className="tabular-nums">
+              {formatTokens(row.prompt_tokens)}
+            </TableCell>
+            <TableCell numeric className="tabular-nums">
+              {formatTokens(row.completion_tokens)}
+            </TableCell>
+            <TableCell numeric className="tabular-nums font-medium text-ink">
+              {formatTokens(row.total_tokens)}
+            </TableCell>
+            <TableCell className="w-48">
+              <div className="flex items-center gap-2">
+                <div className="h-1.5 flex-1 rounded-full bg-line/40">
+                  <div
+                    className="h-1.5 rounded-full bg-brand"
+                    style={{ width: `${Math.max(row.token_share * 100, 1)}%` }}
+                  />
+                </div>
+                <span className="w-12 shrink-0 text-right tabular-nums text-meta text-ink-2">
+                  {(row.token_share * 100).toFixed(1)}%
+                </span>
+              </div>
             </TableCell>
           </TableRow>
         ))}

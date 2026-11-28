@@ -104,3 +104,33 @@ export const cacheShaveStatsQuery = (hours = 24) =>
       (await api.get<CacheShaveStats>('/option/cache_shave/stats', { query: { hours } })) ?? null,
     staleTime: 60_000,
   })
+
+export interface ChannelTokenStatsRow {
+  channel_id: number
+  channel_name: string
+  requests: number
+  prompt_tokens: number
+  completion_tokens: number
+  total_tokens: number
+  token_share: number
+  request_share: number
+}
+
+export interface ChannelTokenStats {
+  window_hours: number
+  total: {
+    requests: number
+    prompt_tokens: number
+    completion_tokens: number
+    total_tokens: number
+  }
+  channels: ChannelTokenStatsRow[]
+}
+
+export const channelTokenStatsQuery = (hours = 24) =>
+  queryOptions({
+    queryKey: ['admin', 'channel-token-stats', hours],
+    queryFn: async (): Promise<ChannelTokenStats | null> =>
+      (await api.get<ChannelTokenStats>('/option/channel_token_stats', { query: { hours } })) ?? null,
+    staleTime: 30_000,
+  })

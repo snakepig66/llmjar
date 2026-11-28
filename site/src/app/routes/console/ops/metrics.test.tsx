@@ -6,32 +6,37 @@ import { ToastProvider } from '@/ui'
 
 import { MetricsContent } from './metrics'
 
-const rows = [
-  {
-    id: 1,
-    metric_name: 'stream_cut_rate',
-    metric_value: 0.25,
-    dimensions: { total: 4, hits: 1 },
-    bucket_time: '2026-10-01T00:00:00+08:00',
-    created_at: '2026-10-01T00:05:00+08:00',
+const payload = {
+  window_hours: 24,
+  total: {
+    requests: 300,
+    prompt_tokens: 2_000_000,
+    completion_tokens: 100_000,
+    total_tokens: 2_100_000,
   },
-  {
-    id: 2,
-    metric_name: '503_reason',
-    metric_value: 2,
-    dimensions: { reason: 'plan_quota_exhausted' },
-    bucket_time: '2026-10-01T00:00:00+08:00',
-    created_at: '2026-10-01T00:05:00+08:00',
-  },
-  {
-    id: 3,
-    metric_name: 'pre_freeze_deviation',
-    metric_value: 1000,
-    dimensions: { capped_requests: 1 },
-    bucket_time: '2026-10-01T00:00:00+08:00',
-    created_at: '2026-10-01T00:05:00+08:00',
-  },
-]
+  channels: [
+    {
+      channel_id: 52,
+      channel_name: 'open design',
+      requests: 200,
+      prompt_tokens: 1_500_000,
+      completion_tokens: 80_000,
+      total_tokens: 1_580_000,
+      token_share: 0.7524,
+      request_share: 0.6667,
+    },
+    {
+      channel_id: 45,
+      channel_name: '商汤小浣熊',
+      requests: 100,
+      prompt_tokens: 500_000,
+      completion_tokens: 20_000,
+      total_tokens: 520_000,
+      token_share: 0.2476,
+      request_share: 0.3333,
+    },
+  ],
+}
 
 function jsonResponse(body: unknown): Response {
   return new Response(JSON.stringify(body), {
@@ -41,20 +46,20 @@ function jsonResponse(body: unknown): Response {
 }
 
 let requestedURLs: string[] = []
-let payload: unknown[] = rows
+let body: unknown = payload
 
 const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
   const url = String(input)
   requestedURLs.push(url)
-  if (url.startsWith('/api/marketplace/admin/metrics')) {
-    return jsonResponse({ success: true, data: payload })
+  if (url.startsWith('/api/option/channel_token_stats')) {
+    return jsonResponse({ success: true, data: body })
   }
   return jsonResponse({ success: false, message: 'not found' })
 })
 
 beforeEach(() => {
   requestedURLs = []
-  payload = rows
+  body = payload
   fetchMock.mockClear()
   vi.stubGlobal('fetch', fetchMock)
 })
@@ -78,44 +83,34 @@ function renderPage() {
 }
 
 describe('admin metrics page', () => {
-  it('lists metric values and decoded dimensions', async () => {
+  it('lists channel token usage with totals and shares', async () => {
     renderPage()
 
-    expect(await screen.findByText('25.00%')).toBeTruthy()
-    expect(screen.getByText('2')).toBeTruthy()
-    expect(screen.getByText('¥0.001')).toBeTruthy()
-    expect(screen.getByText('total=4, hits=1')).toBeTruthy()
-    expect(screen.getByText('reason=plan_quota_exhausted')).toBeTruthy()
-    expect(screen.getByText('capped_requests=1')).toBeTruthy()
-    expect(requestedURLs[0]).toContain('/api/marketplace/admin/metrics?since=')
+    expect(await screen.findByText('open design')).toBeTruthy()
+    expect(screen.getByText('商汤小浣熊')).toBeTruthy()
+    expect(screen.getByText('合计')).toBeTruthy()
+    expect(screen.getByText('1.6M')).toBeTruthy()
+    expect(screen.getByText('75.2%')).toBeTruthy()
+    expect(screen.getByText('24.8%')).toBeTruthy()
+    expect(requestedURLs[0]).toContain('/api/option/channel_token_stats')
   })
 
-  it('filters by metric name and time range', async () => {
+  it('switches time range and refetches with new hours', async () => {
     renderPage()
-    await screen.findByText('25.00%')
-
-    fireEvent.change(screen.getByLabelText('指标'), {
-      target: { value: 'stream_cut_rate' },
-    })
-    await waitFor(() =>
-      expect(
-        requestedURLs.some((url) => url.includes('metric_name=stream_cut_rate')),
-      ).toBe(true),
-    )
+    await screen.findByText('open design')
 
     fireEvent.click(screen.getByRole('tab', { name: '最近 7 天' }))
-    await waitFor(() => {
-      const last = requestedURLs.at(-1) ?? ''
-      const since = new URL(last, 'http://localhost').searchParams.get('since')
-      expect(since).not.toBeNull()
-      expect(Date.now() - Date.parse(since!)).toBeGreaterThan(24 * 3_600_000)
-    })
+    await waitFor(() =>
+      expect(
+        requestedURLs.some((url) => url.includes('hours=168')),
+      ).toBe(true),
+    )
   })
 
-  it('shows the empty state when the range has no metrics', async () => {
-    payload = []
+  it('shows the empty state when the range has no consumption', async () => {
+    body = { window_hours: 24, total: { requests: 0, prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 }, channels: [] }
     renderPage()
 
-    expect(await screen.findByText('当前范围内没有指标')).toBeTruthy()
+    expect(await screen.findByText('当前范围内没有消费记录')).toBeTruthy()
   })
 })
